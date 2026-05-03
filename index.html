@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyTimer - 공부 시간 관리</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="light-theme">
+    <div id="app">
+        <!-- 네비게이션 바 -->
+        <nav id="navbar" class="hidden">
+            <div class="nav-container">
+                <span class="logo">StudyTimer</span>
+                <div class="nav-links">
+                    <a href="#" data-page="dashboard">대시보드</a>
+                    <a href="#" data-page="stats">통계</a>
+                    <a href="#" data-page="admin" id="admin-link" class="hidden">관리자</a>
+                    <button id="theme-toggle">🌓</button>
+                    <button id="logout-btn">로그아웃</button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="container">
+            <!-- 로그인/회원가입 섹션 -->
+            <section id="auth-page" class="auth-container">
+                <div class="auth-card">
+                    <h1 id="auth-title">로그인</h1>
+                    <form id="login-form">
+                        <div class="form-group">
+                            <label for="username">아이디</label>
+                            <input type="text" id="username" name="username" required autocomplete="username">
+                        </div>
+                        <div class="form-group">
+                            <label for="password">비밀번호</label>
+                            <input type="password" id="password" name="password" required autocomplete="current-password">
+                        </div>
+                        <button type="submit" class="btn-primary">로그인</button>
+                    </form>
+                    <p class="auth-switch">계정이 없으신가요? <a href="#" id="show-register">회원가입</a></p>
+                </div>
+            </section>
+
+            <!-- 대시보드 섹션 -->
+            <section id="dashboard-page" class="hidden">
+                <div class="dashboard-header">
+                    <h2>오늘의 공부</h2>
+                    <div id="timer-display">00:00:00</div>
+                </div>
+                
+                <div class="study-controls">
+                    <div class="form-group">
+                        <label for="subject-select">공부할 과목</label>
+                        <select id="subject-select">
+                            <option value="">과목을 선택하세요</option>
+                        </select>
+                    </div>
+                    <button id="study-toggle-btn" class="btn-start">공부 시작</button>
+                </div>
+
+                <div id="active-session-info" class="hidden">
+                    <p>현재 <strong id="current-subject-name"></strong> 공부 중...</p>
+                </div>
+            </section>
+
+            <!-- 통계 섹션 -->
+            <section id="stats-page" class="hidden">
+                <h2>공부 통계</h2>
+                <div class="stats-grid">
+                    <div class="stats-card">
+                        <h3>오늘 과목별 분포</h3>
+                        <div class="chart-container">
+                            <canvas id="daily-pie-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="stats-card">
+                        <h3>시간 요약</h3>
+                        <ul class="stats-list">
+                            <li>오늘 총 공부: <span id="stat-daily">0분</span></li>
+                            <li>최근 7일 합계: <span id="stat-weekly">0분</span></li>
+                            <li>최근 30일 합계: <span id="stat-monthly">0분</span></li>
+                            <li>주간 일평균: <span id="stat-weekly-avg">0분</span></li>
+                            <li>월간 일평균: <span id="stat-monthly-avg">0분</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 관리자 섹션 -->
+            <section id="admin-page" class="hidden">
+                <h2>관리자 페이지</h2>
+                
+                <div class="admin-grid">
+                    <div class="admin-card">
+                        <h3>과목 관리</h3>
+                        <form id="add-subject-form">
+                            <input type="text" id="new-subject-name" placeholder="새 과목 이름" required>
+                            <button type="submit" class="btn-small">추가</button>
+                        </form>
+                        <ul id="admin-subject-list" class="item-list"></ul>
+                    </div>
+                    
+                    <div class="admin-card">
+                        <h3>사용자 관리</h3>
+                        <ul id="admin-user-list" class="item-list"></ul>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 스크립트 모듈 -->
+    <script src="js/api.js"></script>
+    <script src="js/timer.js"></script>
+    <script src="js/chart.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

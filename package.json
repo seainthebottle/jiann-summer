@@ -1,0 +1,13 @@
+{
+  "name": "jiann-summer",
+  "version": "1.0.0",
+  "description": "Study Time Manager",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "cd server && npm start",
+    "dev": "cd server && npm run dev",
+    "install-server": "cd server && npm install"
+  },
+  "author": "",
+  "license": "MIT"
+}

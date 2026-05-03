@@ -96,6 +96,31 @@ const appState = {
                 alert(err.message);
             }
         });
+
+        // 통계 페이지 사용자 선택 (관리자 전용)
+        const userSelect = document.getElementById('admin-user-select');
+        if (userSelect) {
+            userSelect.addEventListener('change', () => {
+                localStorage.setItem('saved_stats_user_id', userSelect.value);
+                this.loadStats();
+            });
+        }
+
+        // 통계 페이지 날짜 및 과목 필터
+        const dateSelect = document.getElementById('stats-date-select');
+        const subjectSelect = document.getElementById('stats-subject-select');
+        
+        const saveDateAndLoad = () => {
+            localStorage.setItem('saved_stats_date', dateSelect.value);
+            this.loadStats();
+        };
+
+        dateSelect.addEventListener('change', saveDateAndLoad);
+        dateSelect.addEventListener('input', saveDateAndLoad);
+        subjectSelect.addEventListener('change', () => {
+            localStorage.setItem('saved_stats_subject_id', subjectSelect.value);
+            this.loadStats();
+        });
     },
 
     onLoginSuccess() {
@@ -103,34 +128,70 @@ const appState = {
         if (this.user.role === 'admin') {
             document.getElementById('admin-link').classList.remove('hidden');
         }
-        this.showPage('dashboard');
+        
+        // 마지막으로 보던 페이지로 복원 (기본값은 대시보드, auth 페이지인 경우 대시보드로)
+        let targetPage = localStorage.getItem('saved_current_page') || 'dashboard';
+        if (targetPage === 'auth') targetPage = 'dashboard';
+        
+        this.showPage(targetPage);
         this.loadSubjects();
         this.checkActiveSession();
+        
+        // 통계 기준일 기본값을 오늘로 설정 (또는 저장된 값 복원)
+        const savedDate = localStorage.getItem('saved_stats_date');
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('stats-date-select').value = savedDate || today;
+        
         window.timer.init();
     },
 
     showPage(pageId) {
         this.currentPage = pageId;
+        localStorage.setItem('saved_current_page', pageId);
+        
         // 모든 섹션 숨기기
         document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
         // 대상 섹션 보이기
         document.getElementById(`${pageId}-page`).classList.remove('hidden');
 
         // 페이지별 데이터 로드
-        if (pageId === 'stats') this.loadStats();
+        if (pageId === 'stats') {
+            if (this.user.role === 'admin') {
+                document.getElementById('admin-user-select-container').classList.remove('hidden');
+                this.loadAdminUserSelect();
+            } else {
+                document.getElementById('admin-user-select-container').classList.add('hidden');
+                this.loadStats();
+            }
+        }
         if (pageId === 'admin') this.loadAdminData();
     },
 
     async loadSubjects() {
         const subjects = await api.getSubjects();
         const select = document.getElementById('subject-select');
+        const statsSelect = document.getElementById('stats-subject-select');
+        
         select.innerHTML = '<option value="">과목을 선택하세요</option>';
+        statsSelect.innerHTML = '<option value="">모든 과목</option>';
+        
         subjects.forEach(sub => {
             const opt = document.createElement('option');
             opt.value = sub.id;
             opt.textContent = sub.name;
             select.appendChild(opt);
+            
+            const statsOpt = document.createElement('option');
+            statsOpt.value = sub.id;
+            statsOpt.textContent = sub.name;
+            statsSelect.appendChild(statsOpt);
         });
+        
+        // 이전에 선택했던 통계 과목 복원
+        const savedSubjectId = localStorage.getItem('saved_stats_subject_id');
+        if (savedSubjectId) {
+            statsSelect.value = savedSubjectId;
+        }
     },
 
     async checkActiveSession() {
@@ -143,7 +204,12 @@ const appState = {
     },
 
     async loadStats() {
-        const stats = await api.getStats();
+        // 관리자가 명시적으로 사용자를 선택하지 않았을 경우, 현재 드롭다운의 값을 사용하거나 기본값(본인) 사용
+        const userId = this.user.role === 'admin' ? document.getElementById('admin-user-select').value : null;
+        const date = document.getElementById('stats-date-select').value;
+        const subjectId = document.getElementById('stats-subject-select').value;
+        
+        const stats = await api.getStats(userId, date, subjectId);
 
         // 시간 포맷 헬퍼 (초 -> 시분초)
         const format = (sec) => {
@@ -159,6 +225,35 @@ const appState = {
         document.getElementById('stat-monthly-avg').textContent = format(stats.monthlyAvg);
 
         window.charts.renderDailyPie(stats.dailyPie);
+    },
+
+    async loadAdminUserSelect() {
+        const users = await api.adminGetUsers();
+        const select = document.getElementById('admin-user-select');
+        const currentValue = select.value;
+        
+        select.innerHTML = '';
+        users.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.id;
+            opt.textContent = `${u.username} (${u.role})`;
+            if (u.id === this.user.id) {
+                opt.textContent += ' (나)';
+            }
+            select.appendChild(opt);
+        });
+
+        // 이전에 선택된 값이 있었다면 유지, 없으면 localStorage 확인, 그것도 없으면 현재 로그인한 관리자 본인 선택
+        const savedUserId = localStorage.getItem('saved_stats_user_id');
+        if (currentValue && Array.from(select.options).some(opt => opt.value === currentValue)) {
+            select.value = currentValue;
+        } else if (savedUserId && Array.from(select.options).some(opt => opt.value === savedUserId)) {
+            select.value = savedUserId;
+        } else {
+            select.value = this.user.id;
+        }
+        
+        this.loadStats(select.value);
     },
 
     async loadAdminData() {

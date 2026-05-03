@@ -53,7 +53,8 @@ const api = {
     },
 
     async verify() {
-        return await this.request('/auth/verify');
+        const data = await this.request('/auth/verify');
+        return data.user;
     },
 
     // 공부 관련
@@ -78,8 +79,15 @@ const api = {
         return await this.request('/study/status');
     },
 
-    async getStats() {
-        return await this.request('/study/stats');
+    async getStats(userId, date, subjectId) {
+        const params = new URLSearchParams();
+        if (userId) params.append('targetUserId', userId);
+        if (date) params.append('date', date);
+        if (subjectId) params.append('subjectId', subjectId);
+        
+        const queryString = params.toString();
+        const path = queryString ? `/study/stats?${queryString}` : '/study/stats';
+        return await this.request(path);
     },
 
     // 관리자 관련

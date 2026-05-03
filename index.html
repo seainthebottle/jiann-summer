@@ -74,10 +74,29 @@
 
             <!-- 통계 섹션 -->
             <section id="stats-page" class="hidden">
-                <h2>공부 통계</h2>
+                <div class="header-with-action">
+                    <h2>공부 통계</h2>
+                    <div id="admin-user-select-container" class="hidden">
+                        <label for="admin-user-select">사용자 선택:</label>
+                        <select id="admin-user-select"></select>
+                    </div>
+                </div>
+                
+                <div class="stats-filters" style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="stats-date-select">기준일 선택:</label>
+                        <input type="date" id="stats-date-select">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="stats-subject-select">과목 필터:</label>
+                        <select id="stats-subject-select">
+                            <option value="">모든 과목</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="stats-grid">
                     <div class="stats-card">
-                        <h3>오늘 과목별 분포</h3>
+                        <h3>선택일 과목별 분포</h3>
                         <div class="chart-container">
                             <canvas id="daily-pie-chart"></canvas>
                         </div>
@@ -85,7 +104,7 @@
                     <div class="stats-card">
                         <h3>시간 요약</h3>
                         <ul class="stats-list">
-                            <li>오늘 총 공부: <span id="stat-daily">0분</span></li>
+                            <li>선택일 총 공부: <span id="stat-daily">0분</span></li>
                             <li>최근 7일 합계: <span id="stat-weekly">0분</span></li>
                             <li>최근 30일 합계: <span id="stat-monthly">0분</span></li>
                             <li>주간 일평균: <span id="stat-weekly-avg">0분</span></li>

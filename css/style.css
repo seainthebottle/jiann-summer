@@ -192,6 +192,31 @@ select:focus {
     padding-top: 40px;
 }
 
+.header-with-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.header-with-action h2 {
+    margin-bottom: 0;
+}
+
+#admin-user-select-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#admin-user-select {
+    width: auto;
+    min-width: 200px;
+    padding: 8px 12px;
+}
+
 #timer-display {
     font-size: 4rem;
     font-weight: 700;

@@ -74,6 +74,9 @@ async function checkAdmin() {
             console.log('관리자 계정이 성공적으로 등록되었습니다.');
             rl.close();
         }
+
+
+
     } catch (err) {
         console.error('관리자 계정 확인 중 오류 발생:', err.message);
         console.log('데이터베이스 연결 및 테이블 생성 여부를 확인해주세요.');

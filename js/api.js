@@ -108,10 +108,17 @@ const api = {
         });
     },
 
-    async adminAddSubject(name) {
+    async adminAddSubject(name, color) {
         return await this.request('/admin/subjects', {
             method: 'POST',
-            body: JSON.stringify({ name })
+            body: JSON.stringify({ name, color })
+        });
+    },
+
+    async adminUpdateSubject(id, name, color) {
+        return await this.request(`/admin/subjects/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name, color })
         });
     },
 

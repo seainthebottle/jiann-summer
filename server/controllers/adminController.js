@@ -47,15 +47,31 @@ exports.deleteUser = async (req, res) => {
 
 // 과목 추가
 exports.addSubject = async (req, res) => {
-    const { name } = req.body;
+    const { name, color } = req.body;
     try {
-        await db.query("INSERT INTO subjects (name) VALUES (?)", [name]);
+        const subjectColor = color || '#339af0';
+        await db.query("INSERT INTO subjects (name, color) VALUES (?, ?)", [name, subjectColor]);
         res.status(201).json({ message: '과목 추가 성공' });
     } catch (err) {
         if (err.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ error: '이미 존재하는 과목입니다.' });
         }
         res.status(500).json({ error: '과목 추가 중 오류 발생' });
+    }
+};
+
+// 과목 수정 (이름 및 색상)
+exports.updateSubject = async (req, res) => {
+    const { id } = req.params;
+    const { name, color } = req.body;
+    try {
+        await db.query("UPDATE subjects SET name = ?, color = ? WHERE id = ?", [name, color, id]);
+        res.json({ message: '과목 수정 성공' });
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: '이미 존재하는 과목 이름입니다.' });
+        }
+        res.status(500).json({ error: '과목 수정 중 오류 발생' });
     }
 };
 

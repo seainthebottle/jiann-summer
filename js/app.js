@@ -70,8 +70,9 @@ const appState = {
         document.getElementById('add-subject-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('new-subject-name').value;
+            const color = document.getElementById('new-subject-color').value;
             try {
-                await api.adminAddSubject(name);
+                await api.adminAddSubject(name, color);
                 document.getElementById('new-subject-name').value = '';
                 this.loadAdminData();
                 this.loadSubjects(); // 일반 대시보드 과목 목록도 갱신
@@ -224,7 +225,7 @@ const appState = {
         document.getElementById('stat-weekly-avg').textContent = format(stats.weeklyAvg);
         document.getElementById('stat-monthly-avg').textContent = format(stats.monthlyAvg);
 
-        window.charts.renderDailyPie(stats.dailyPie);
+        window.charts.renderDailyPie(stats.sessions, date);
     },
 
     async loadAdminUserSelect() {
@@ -275,11 +276,29 @@ const appState = {
         subjects.forEach(s => {
             const li = document.createElement('li');
             li.innerHTML = `
-                <span>${s.name}</span>
-                <button class="delete-btn" onclick="appState.deleteSubject(${s.id})">삭제</button>
+                <div style="display: flex; gap: 10px; align-items: center; width: 100%;">
+                    <input type="color" id="subj-color-${s.id}" value="${s.color || '#339af0'}" style="padding: 0; width: 30px; height: 30px;">
+                    <input type="text" id="subj-name-${s.id}" value="${s.name}" style="flex: 1; padding: 5px; margin-bottom: 0;">
+                    <button class="btn-small" onclick="appState.updateSubject(${s.id})" style="padding: 5px 10px;">수정</button>
+                    <button class="delete-btn" onclick="appState.deleteSubject(${s.id})" style="padding: 5px 10px;">삭제</button>
+                </div>
             `;
             subList.appendChild(li);
         });
+    },
+
+    async updateSubject(id) {
+        const name = document.getElementById(`subj-name-${id}`).value;
+        const color = document.getElementById(`subj-color-${id}`).value;
+        if (!name) return alert('과목 이름을 입력하세요.');
+        try {
+            await api.adminUpdateSubject(id, name, color);
+            alert('과목이 수정되었습니다.');
+            this.loadAdminData();
+            this.loadSubjects();
+        } catch (err) {
+            alert(err.message);
+        }
     },
 
     async deleteUser(id) {

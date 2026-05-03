@@ -10,6 +10,7 @@ router.get('/users', adminController.getUsers);
 router.post('/users', adminController.addUser);
 router.delete('/users/:id', adminController.deleteUser);
 router.post('/subjects', adminController.addSubject);
+router.put('/subjects/:id', adminController.updateSubject);
 router.delete('/subjects/:id', adminController.deleteSubject);
 
 module.exports = router;

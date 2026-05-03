@@ -37,12 +37,23 @@ exports.stopSession = async (req, res) => {
         }
 
         const session = active[0];
+        
+        // 진행 시간 계산 (초)
+        const diffCheck = await db.query("SELECT TIMESTAMPDIFF(SECOND, start_time, NOW()) as diff FROM study_sessions WHERE id = ?", [session.id]);
+        const diffSeconds = diffCheck[0].diff;
+
+        if (diffSeconds <= 60) {
+            // 1분 이하인 경우 세션 삭제
+            await db.query("DELETE FROM study_sessions WHERE id = ?", [session.id]);
+            return res.json({ message: '공부 시간이 1분 이하여서 기록되지 않았습니다.' });
+        }
+
         await db.query(
             `UPDATE study_sessions 
              SET end_time = NOW(), 
-                 duration_seconds = TIMESTAMPDIFF(SECOND, start_time, NOW()) 
+                 duration_seconds = ?
              WHERE id = ?`,
-            [session.id]
+            [diffSeconds, session.id]
         );
         res.json({ message: '공부 종료!' });
     } catch (err) {
@@ -80,31 +91,51 @@ exports.getStats = async (req, res) => {
     try {
         let baseDate = date || null;
         
-        // 1. 일간 과목별 통계 (파이 차트용)
-        let pieQuery = `
-            SELECT sub.name, SUM(IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds)) as total_seconds
+        // 1. 선택일 시간대별 공부 분포 (24시간 파이 차트용)
+        let sessionsQuery = `
+            SELECT s.start_time, IF(s.end_time IS NULL, NOW(), s.end_time) as actual_end, sub.name as subject_name, sub.color
             FROM study_sessions s
-            JOIN subjects sub ON s.subject_id = sub.id
-            WHERE s.user_id = ?
+            LEFT JOIN subjects sub ON s.subject_id = sub.id
+            WHERE s.user_id = ? AND IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds) > 60
         `;
-        let pieParams = [user_id];
-
+        let sessionsParams = [user_id];
         if (baseDate) {
-            pieQuery += ` AND DATE(s.start_time) = ?`;
-            pieParams.push(baseDate);
+            sessionsQuery += ` AND DATE(s.start_time) <= ? AND DATE(IF(s.end_time IS NULL, NOW(), s.end_time)) >= ?`;
+            sessionsParams.push(baseDate, baseDate);
         } else {
-            pieQuery += ` AND DATE(s.start_time) = CURDATE()`;
+            sessionsQuery += ` AND DATE(s.start_time) <= CURDATE() AND DATE(IF(s.end_time IS NULL, NOW(), s.end_time)) >= CURDATE()`;
         }
-
         if (subjectId) {
-            pieQuery += ` AND s.subject_id = ?`;
-            pieParams.push(subjectId);
+            sessionsQuery += ` AND s.subject_id = ?`;
+            sessionsParams.push(subjectId);
         }
-        pieQuery += ` GROUP BY sub.id`;
-        const dailyPie = await db.query(pieQuery, pieParams);
+        
+        const rawSessions = await db.query(sessionsQuery, sessionsParams);
+        
+        // 날짜 범위를 00:00:00 ~ 23:59:59로 제한한 세션 목록 생성
+        let targetDateStr = baseDate ? baseDate : new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+        let dayStart = new Date(targetDateStr + 'T00:00:00');
+        let dayEnd = new Date(targetDateStr + 'T23:59:59.999');
+        
+        const sessions = [];
+        rawSessions.forEach(session => {
+            let start = new Date(session.start_time);
+            let end = new Date(session.actual_end);
+            
+            if (start < dayStart) start = dayStart;
+            if (end > dayEnd) end = dayEnd;
+            if (start >= end) return;
+            
+            sessions.push({
+                subject_name: session.subject_name,
+                color: session.color || '#339af0',
+                start: start.toISOString(),
+                end: end.toISOString()
+            });
+        });
 
         // 2. 일간, 주간, 월간 총합 및 평균
-        let dailyQuery = "SELECT SUM(IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds)) as total FROM study_sessions s WHERE s.user_id = ?";
+        let dailyQuery = "SELECT SUM(IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds)) as total FROM study_sessions s WHERE s.user_id = ? AND IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds) > 60";
         let dailyParams = [user_id];
         if (baseDate) {
             dailyQuery += " AND DATE(s.start_time) = ?";
@@ -119,7 +150,7 @@ exports.getStats = async (req, res) => {
         const dailyTotal = await db.query(dailyQuery, dailyParams);
         
         // 주간 합계 (기준일 포함 최근 7일)
-        let weeklyQuery = "SELECT SUM(IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds)) as total FROM study_sessions s WHERE s.user_id = ?";
+        let weeklyQuery = "SELECT SUM(IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds)) as total FROM study_sessions s WHERE s.user_id = ? AND IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds) > 60";
         let weeklyParams = [user_id];
         if (baseDate) {
             weeklyQuery += " AND DATE(s.start_time) > DATE_SUB(?, INTERVAL 7 DAY) AND DATE(s.start_time) <= ?";
@@ -134,7 +165,7 @@ exports.getStats = async (req, res) => {
         const weeklyTotal = await db.query(weeklyQuery, weeklyParams);
 
         // 월간 합계 (기준일 포함 최근 30일)
-        let monthlyQuery = "SELECT SUM(IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds)) as total FROM study_sessions s WHERE s.user_id = ?";
+        let monthlyQuery = "SELECT SUM(IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds)) as total FROM study_sessions s WHERE s.user_id = ? AND IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds) > 60";
         let monthlyParams = [user_id];
         if (baseDate) {
             monthlyQuery += " AND DATE(s.start_time) > DATE_SUB(?, INTERVAL 30 DAY) AND DATE(s.start_time) <= ?";
@@ -149,7 +180,7 @@ exports.getStats = async (req, res) => {
         const monthlyTotal = await db.query(monthlyQuery, monthlyParams);
 
         res.json({
-            dailyPie,
+            sessions,
             dailyTotal: dailyTotal[0].total || 0,
             weeklyTotal: weeklyTotal[0].total || 0,
             monthlyTotal: monthlyTotal[0].total || 0,

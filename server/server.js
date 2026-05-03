@@ -36,6 +36,12 @@ app.use('/api', (req, res) => {
 // 정적 파일 설정 (루트 디렉토리의 자산들)
 app.use('/css', express.static(path.join(__dirname, '../css')));
 app.use('/js', express.static(path.join(__dirname, '../js')));
+app.use('/assets', express.static(path.join(__dirname, '../assets')));
+
+// 서비스 워커 라우팅: 루트에서 호출하지만 실제로는 js/sw.js 제공 (스코프 유지)
+app.get('/sw.js', (req, res) => {
+    res.sendFile(path.join(__dirname, '../js/sw.js'));
+});
 
 // 메인 페이지 (index.html) 제공
 app.get('/', (req, res) => {

@@ -134,8 +134,8 @@ exports.getStats = async (req, res) => {
             });
         });
 
-        // 2. 일간, 주간, 월간 총합 및 평균
-        let dailyQuery = "SELECT SUM(IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds)) as total FROM study_sessions s WHERE s.user_id = ? AND IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds) > 60";
+        // 2. 일간, 주간, 월간 총합 및 평균 (완료된 세션만 합산하여 클라이언트 타이머와 이중 계산 방지)
+        let dailyQuery = "SELECT COALESCE(SUM(s.duration_seconds), 0) as total FROM study_sessions s WHERE s.user_id = ? AND s.duration_seconds > 60";
         let dailyParams = [user_id];
         if (baseDate) {
             dailyQuery += " AND DATE(s.start_time) = ?";
@@ -147,10 +147,10 @@ exports.getStats = async (req, res) => {
             dailyQuery += " AND s.subject_id = ?";
             dailyParams.push(subjectId);
         }
-        const dailyTotal = await db.query(dailyQuery, dailyParams);
+        const dailyTotalResult = await db.query(dailyQuery, dailyParams);
         
-        // 주간 합계 (기준일 포함 최근 7일)
-        let weeklyQuery = "SELECT SUM(IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds)) as total FROM study_sessions s WHERE s.user_id = ? AND IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds) > 60";
+        // 주간 합계
+        let weeklyQuery = "SELECT COALESCE(SUM(s.duration_seconds), 0) as total FROM study_sessions s WHERE s.user_id = ? AND s.duration_seconds > 60";
         let weeklyParams = [user_id];
         if (baseDate) {
             weeklyQuery += " AND DATE(s.start_time) > DATE_SUB(?, INTERVAL 7 DAY) AND DATE(s.start_time) <= ?";
@@ -162,10 +162,10 @@ exports.getStats = async (req, res) => {
             weeklyQuery += " AND s.subject_id = ?";
             weeklyParams.push(subjectId);
         }
-        const weeklyTotal = await db.query(weeklyQuery, weeklyParams);
+        const weeklyTotalResult = await db.query(weeklyQuery, weeklyParams);
 
-        // 월간 합계 (기준일 포함 최근 30일)
-        let monthlyQuery = "SELECT SUM(IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds)) as total FROM study_sessions s WHERE s.user_id = ? AND IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds) > 60";
+        // 월간 합계
+        let monthlyQuery = "SELECT COALESCE(SUM(s.duration_seconds), 0) as total FROM study_sessions s WHERE s.user_id = ? AND s.duration_seconds > 60";
         let monthlyParams = [user_id];
         if (baseDate) {
             monthlyQuery += " AND DATE(s.start_time) > DATE_SUB(?, INTERVAL 30 DAY) AND DATE(s.start_time) <= ?";
@@ -177,15 +177,25 @@ exports.getStats = async (req, res) => {
             monthlyQuery += " AND s.subject_id = ?";
             monthlyParams.push(subjectId);
         }
-        const monthlyTotal = await db.query(monthlyQuery, monthlyParams);
+        const monthlyTotalResult = await db.query(monthlyQuery, monthlyParams);
+
+        // 3. 전체 누적 합계 (완료된 세션만)
+        let totalQuery = "SELECT COALESCE(SUM(s.duration_seconds), 0) as total FROM study_sessions s WHERE s.user_id = ? AND s.duration_seconds > 60";
+        let totalParams = [user_id];
+        if (subjectId) {
+            totalQuery += " AND s.subject_id = ?";
+            totalParams.push(subjectId);
+        }
+        const totalTotalResult = await db.query(totalQuery, totalParams);
 
         res.json({
             sessions,
-            dailyTotal: dailyTotal[0].total || 0,
-            weeklyTotal: weeklyTotal[0].total || 0,
-            monthlyTotal: monthlyTotal[0].total || 0,
-            weeklyAvg: (weeklyTotal[0].total || 0) / 7,
-            monthlyAvg: (monthlyTotal[0].total || 0) / 30
+            dailyTotal: dailyTotalResult[0].total,
+            weeklyTotal: weeklyTotalResult[0].total,
+            monthlyTotal: monthlyTotalResult[0].total,
+            weeklyAvg: dailyTotalResult[0].total / 7,
+            monthlyAvg: dailyTotalResult[0].total / 30,
+            cumulativeTotal: totalTotalResult[0].total
         });
     } catch (err) {
         console.error(err);

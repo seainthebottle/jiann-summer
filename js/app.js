@@ -38,30 +38,20 @@ const appState = {
         document.querySelectorAll('nav a[data-page]').forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.showPage(e.target.dataset.page);
+                this.showPage(e.currentTarget.dataset.page);
             });
         });
 
         // 로그아웃
         document.getElementById('logout-btn').addEventListener('click', () => {
-            api.removeToken();
-            this.user = null;
-            location.reload();
+            if (confirm('정말 로그아웃 하시겠습니까?')) {
+                api.removeToken();
+                this.user = null;
+                location.reload();
+            }
         });
 
-        // 앱 설치 버튼
-        const installBtn = document.getElementById('install-btn');
-        if (installBtn) {
-            installBtn.addEventListener('click', async () => {
-                if (!deferredPrompt) return;
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    installBtn.classList.add('hidden');
-                }
-                deferredPrompt = null;
-            });
-        }
+
 
         // 테마 토글
         document.getElementById('theme-toggle').addEventListener('click', () => this.toggleTheme());
@@ -121,6 +111,14 @@ const appState = {
         subjectSelect.addEventListener('change', () => {
             localStorage.setItem('saved_stats_subject_id', subjectSelect.value);
             this.loadStats();
+        });
+
+        // 홈 화면 과목 선택 기억
+        const homeSubjectSelect = document.getElementById('subject-select');
+        homeSubjectSelect.addEventListener('change', () => {
+            localStorage.setItem('saved_home_subject_id', homeSubjectSelect.value);
+            this.updateHomeSubjectTime();
+            this.updateStudyButtonState();
         });
     },
 
@@ -189,10 +187,19 @@ const appState = {
         });
         
         // 이전에 선택했던 통계 과목 복원
-        const savedSubjectId = localStorage.getItem('saved_stats_subject_id');
-        if (savedSubjectId) {
-            statsSelect.value = savedSubjectId;
+        const savedStatsSubjectId = localStorage.getItem('saved_stats_subject_id');
+        if (savedStatsSubjectId) {
+            statsSelect.value = savedStatsSubjectId;
         }
+
+        // 홈 화면 과목 선택 복원
+        const savedHomeSubjectId = localStorage.getItem('saved_home_subject_id');
+        if (savedHomeSubjectId) {
+            select.value = savedHomeSubjectId;
+        }
+        
+        this.updateHomeSubjectTime();
+        this.updateStudyButtonState();
     },
 
     async checkActiveSession() {
@@ -200,7 +207,10 @@ const appState = {
         if (active) {
             // 셀렉트 박스에서 해당 과목 선택 상태로 변경
             document.getElementById('subject-select').value = active.subject_id;
+            await this.updateHomeSubjectTime(); // 비동기 대기 추가
             window.timer.start(active.start_time);
+        } else {
+            await this.updateHomeSubjectTime();
         }
     },
 
@@ -322,6 +332,74 @@ const appState = {
         }
     },
 
+    formatSeconds(sec) {
+        const totalSeconds = Math.floor(sec);
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        return `${h}시간 ${m}분 ${s}초`;
+    },
+
+    async updateHomeSubjectTime() {
+        const subjectSelect = document.getElementById('subject-select');
+        const subjectId = subjectSelect.value;
+        const todayDisplay = document.getElementById('today-total-time');
+        const subjectTodayDisplay = document.getElementById('today-subject-time');
+        const subjectCard = document.getElementById('today-subject-card');
+        const subjectLabel = document.getElementById('today-subject-label');
+        
+        try {
+            // 1. 오늘 총 공부 시간 로드
+            const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+            const totalStats = await api.getStats(null, today, null);
+            // Number()를 사용하여 문자열 결합 방지
+            const totalTime = Number(totalStats.dailyTotal) || 0;
+            todayDisplay.textContent = this.formatSeconds(totalTime);
+            if (window.timer) window.timer.initialTodayTotalTime = totalTime;
+
+            if (!subjectId) {
+                subjectCard.classList.add('hidden');
+                if (window.timer) window.timer.initialSubjectTodayTime = 0;
+                return;
+            }
+
+            // 2. 해당 과목의 오늘 공부 시간 로드
+            const subjectStats = await api.getStats(null, today, subjectId);
+            const subjectTime = Number(subjectStats.dailyTotal) || 0;
+            
+            const subjectName = subjectSelect.options[subjectSelect.selectedIndex].text;
+            subjectLabel.textContent = `오늘 ${subjectName} 공부`;
+            subjectTodayDisplay.textContent = this.formatSeconds(subjectTime);
+            subjectCard.classList.remove('hidden');
+            
+            // 타이머에서도 사용할 수 있도록 저장
+            if (window.timer) window.timer.initialSubjectTodayTime = subjectTime;
+        } catch (err) {
+            console.error('시간 로드 실패:', err);
+        }
+    },
+
+
+
+    updateStudyButtonState() {
+        const select = document.getElementById('subject-select');
+        const btn = document.getElementById('study-toggle-btn');
+        
+        // 공부 중일 때는 상태를 변경하지 않음 (timer.js에서 관리)
+        if (btn.classList.contains('btn-stop')) return;
+
+        const subjectId = select.value;
+        const subjectName = select.options[select.selectedIndex]?.text || '';
+
+        if (subjectId) {
+            btn.disabled = false;
+            btn.textContent = `${subjectName} 공부 시작`;
+        } else {
+            btn.disabled = true;
+            btn.textContent = '과목을 선택하세요';
+        }
+    },
+
     initTheme() {
         const theme = localStorage.getItem('theme') || 'light';
         document.body.className = `${theme}-theme`;
@@ -338,31 +416,4 @@ const appState = {
 window.appState = appState;
 appState.init();
 
-// PWA 설치 로직
-let deferredPrompt;
 
-window.addEventListener('beforeinstallprompt', (e) => {
-    // 브라우저 기본 설치 프롬프트 방지
-    e.preventDefault();
-    // 이벤트 보관
-    deferredPrompt = e;
-    
-    // 모바일 기기이거나 화면 너비가 768px 이하인지 확인 (개발자 도구 테스트용)
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
-    
-    if (isMobile) {
-        const installBtn = document.getElementById('install-btn');
-        if (installBtn) {
-            installBtn.classList.remove('hidden');
-        }
-    }
-});
-
-window.addEventListener('appinstalled', () => {
-    const installBtn = document.getElementById('install-btn');
-    if (installBtn) {
-        installBtn.classList.add('hidden');
-    }
-    deferredPrompt = null;
-    console.log('PWA가 성공적으로 설치되었습니다.');
-});

@@ -5,8 +5,6 @@ const timer = {
     display: document.getElementById('timer-display'),
     toggleBtn: document.getElementById('study-toggle-btn'),
     subjectSelect: document.getElementById('subject-select'),
-    activeInfo: document.getElementById('active-session-info'),
-    currentSubjectName: document.getElementById('current-subject-name'),
 
     init() {
         this.toggleBtn.addEventListener('click', () => this.handleToggle());
@@ -22,6 +20,7 @@ const timer = {
             }
             try {
                 await api.startSession(subjectId);
+                if (window.appState) await window.appState.updateHomeSubjectTime();
                 this.start(new Date());
             } catch (err) {
                 alert(err.message);
@@ -41,11 +40,10 @@ const timer = {
 
     start(time) {
         startTime = new Date(time);
-        this.toggleBtn.textContent = '공부 종료';
+        const subjectName = this.subjectSelect.options[this.subjectSelect.selectedIndex]?.text || '';
+        this.toggleBtn.textContent = `${subjectName} 공부 종료`;
         this.toggleBtn.classList.replace('btn-start', 'btn-stop');
         this.subjectSelect.disabled = true;
-        this.activeInfo.classList.remove('hidden');
-        this.currentSubjectName.textContent = this.subjectSelect.options[this.subjectSelect.selectedIndex]?.text || '';
 
         clearInterval(timerInterval);
         timerInterval = setInterval(() => this.updateDisplay(), 1000);
@@ -54,11 +52,13 @@ const timer = {
 
     stop() {
         clearInterval(timerInterval);
-        this.toggleBtn.textContent = '공부 시작';
         this.toggleBtn.classList.replace('btn-stop', 'btn-start');
         this.subjectSelect.disabled = false;
-        this.activeInfo.classList.add('hidden');
         this.display.textContent = '00:00:00';
+        if (window.appState) {
+            window.appState.updateHomeSubjectTime();
+            window.appState.updateStudyButtonState();
+        }
     },
 
     updateDisplay() {
@@ -70,6 +70,26 @@ const timer = {
         const seconds = String(diff % 60).padStart(2, '0');
         
         this.display.textContent = `${hours}:${minutes}:${seconds}`;
+
+        if (!window.appState) return;
+
+        // 1. 오늘 총 공부 시간 실시간 업데이트
+        if (this.initialTodayTotalTime !== undefined) {
+            const total = this.initialTodayTotalTime + diff;
+            const todayDisplay = document.getElementById('today-total-time');
+            if (todayDisplay) {
+                todayDisplay.textContent = window.appState.formatSeconds(total);
+            }
+        }
+
+        // 2. 오늘 과목 공부 시간 실시간 업데이트
+        if (this.initialSubjectTodayTime !== undefined) {
+            const total = this.initialSubjectTodayTime + diff;
+            const subjectTodayDisplay = document.getElementById('today-subject-time');
+            if (subjectTodayDisplay) {
+                subjectTodayDisplay.textContent = window.appState.formatSeconds(total);
+            }
+        }
     }
 };
 

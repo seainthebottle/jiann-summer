@@ -49,6 +49,20 @@ const appState = {
             location.reload();
         });
 
+        // 앱 설치 버튼
+        const installBtn = document.getElementById('install-btn');
+        if (installBtn) {
+            installBtn.addEventListener('click', async () => {
+                if (!deferredPrompt) return;
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    installBtn.classList.add('hidden');
+                }
+                deferredPrompt = null;
+            });
+        }
+
         // 테마 토글
         document.getElementById('theme-toggle').addEventListener('click', () => this.toggleTheme());
 
@@ -61,6 +75,23 @@ const appState = {
                 document.getElementById('new-subject-name').value = '';
                 this.loadAdminData();
                 this.loadSubjects(); // 일반 대시보드 과목 목록도 갱신
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        // 사용자 추가 (관리자)
+        document.getElementById('add-user-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('new-username').value;
+            const password = document.getElementById('new-password').value;
+            const role = document.getElementById('new-role').value;
+            try {
+                await api.adminAddUser(username, password, role);
+                document.getElementById('new-username').value = '';
+                document.getElementById('new-password').value = '';
+                document.getElementById('new-role').value = 'user';
+                this.loadAdminData();
             } catch (err) {
                 alert(err.message);
             }
@@ -192,3 +223,32 @@ const appState = {
 
 window.appState = appState;
 appState.init();
+
+// PWA 설치 로직
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    // 브라우저 기본 설치 프롬프트 방지
+    e.preventDefault();
+    // 이벤트 보관
+    deferredPrompt = e;
+    
+    // 모바일 기기이거나 화면 너비가 768px 이하인지 확인 (개발자 도구 테스트용)
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+    
+    if (isMobile) {
+        const installBtn = document.getElementById('install-btn');
+        if (installBtn) {
+            installBtn.classList.remove('hidden');
+        }
+    }
+});
+
+window.addEventListener('appinstalled', () => {
+    const installBtn = document.getElementById('install-btn');
+    if (installBtn) {
+        installBtn.classList.add('hidden');
+    }
+    deferredPrompt = null;
+    console.log('PWA가 성공적으로 설치되었습니다.');
+});

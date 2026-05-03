@@ -23,6 +23,12 @@ self.addEventListener('install', (event) => {
 
 // 리소스 요청 시 캐시 우선 전략 사용
 self.addEventListener('fetch', (event) => {
+    // API 요청은 캐시하지 않고 항상 네트워크 사용
+    if (event.request.url.includes('/api/')) {
+        event.respondWith(fetch(event.request));
+        return;
+    }
+
     event.respondWith(
         caches.match(event.request).then((response) => {
             return response || fetch(event.request);

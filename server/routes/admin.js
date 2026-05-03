@@ -7,6 +7,7 @@ const adminMiddleware = require('../middleware/adminMiddleware');
 router.use(authMiddleware, adminMiddleware); // 모든 관리자 API는 인증 및 관리자 권한 필요
 
 router.get('/users', adminController.getUsers);
+router.post('/users', adminController.addUser);
 router.delete('/users/:id', adminController.deleteUser);
 router.post('/subjects', adminController.addSubject);
 router.delete('/subjects/:id', adminController.deleteSubject);

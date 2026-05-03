@@ -87,6 +87,13 @@ const api = {
         return await this.request('/admin/users');
     },
 
+    async adminAddUser(username, password, role) {
+        return await this.request('/admin/users', {
+            method: 'POST',
+            body: JSON.stringify({ username, password, role })
+        });
+    },
+
     async adminDeleteUser(userId) {
         return await this.request('/admin/users/' + userId, {
             method: 'DELETE'

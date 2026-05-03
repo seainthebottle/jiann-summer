@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const bcrypt = require('bcrypt');
 
 // 모든 사용자 조회
 exports.getUsers = async (req, res) => {
@@ -7,6 +8,25 @@ exports.getUsers = async (req, res) => {
         res.json(users);
     } catch (err) {
         res.status(500).json({ error: '사용자 조회 중 오류 발생' });
+    }
+};
+
+// 사용자 추가
+exports.addUser = async (req, res) => {
+    const { username, password, role } = req.body;
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const userRole = role || 'user';
+        await db.query(
+            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+            [username, hashedPassword, userRole]
+        );
+        res.status(201).json({ message: '사용자 추가 성공' });
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: '이미 존재하는 아이디입니다.' });
+        }
+        res.status(500).json({ error: '사용자 추가 중 오류 발생' });
     }
 };
 

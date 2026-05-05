@@ -47,7 +47,7 @@ mysql -u root -p < database/schema.sql
    ```
 3. Create a `.env` file in the `server` directory (you can copy `.env.example` if available or create a new one):
    ```env
-   PORT=3000
+   PORT=3020
    DB_HOST=localhost
    DB_USER=your_db_user
    DB_PASSWORD=your_db_password
@@ -66,7 +66,7 @@ mysql -u root -p < database/schema.sql
    npm run dev
    ```
 2. **Initial Admin Setup**: On the first run, the server will prompt you in the terminal to create an initial admin account. Follow the instructions in the console.
-3. Open your browser and navigate to `http://localhost:3000`.
+3. Open your browser and navigate to `http://localhost:3020`.
 
 ## 📂 Project Structure (프로젝트 구조)
 

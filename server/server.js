@@ -8,7 +8,7 @@ require('dotenv').config();
 
 const path = require('path');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3020;
 
 // 미들웨어 설정
 app.use((req, res, next) => {
@@ -63,14 +63,14 @@ async function checkAdmin() {
 
             const username = await ask('관리자 아이디를 입력하세요: ');
             const password = await ask('관리자 비밀번호를 입력하세요: ');
-            
+
             const hashedPassword = await bcrypt.hash(password, 10);
-            
+
             await db.query(
                 "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
                 [username, hashedPassword, 'admin']
             );
-            
+
             console.log('관리자 계정이 성공적으로 등록되었습니다.');
             rl.close();
         }

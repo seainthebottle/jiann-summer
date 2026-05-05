@@ -30,7 +30,7 @@ const appState = {
                 this.user = await api.login(username, password);
                 this.onLoginSuccess();
             } catch (err) {
-                alert(err.message);
+                alert(`Failed to login for ${username} : ${err.message}`);
             }
         });
 

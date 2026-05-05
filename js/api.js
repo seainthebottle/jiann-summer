@@ -84,7 +84,7 @@ const api = {
         if (userId) params.append('targetUserId', userId);
         if (date) params.append('date', date);
         if (subjectId) params.append('subjectId', subjectId);
-        
+
         const queryString = params.toString();
         const path = queryString ? `/study/stats?${queryString}` : '/study/stats';
         return await this.request(path);

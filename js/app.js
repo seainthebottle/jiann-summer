@@ -115,6 +115,10 @@ const appState = {
             this.loadStats();
         });
 
+        // 통계 페이지 날짜 네비게이션 버튼
+        document.getElementById('stats-prev-date').addEventListener('click', () => this.changeStatsDate(-1));
+        document.getElementById('stats-next-date').addEventListener('click', () => this.changeStatsDate(1));
+
         // 홈 화면 과목 선택 기억
         const homeSubjectSelect = document.getElementById('subject-select');
         homeSubjectSelect.addEventListener('change', () => {
@@ -300,6 +304,46 @@ const appState = {
 
         // 과목별 범례 생성
         this.renderSubjectLegend(stats.sessions);
+
+        // 날짜 네비게이션 버튼 상태 업데이트
+        this.updateDateNavButtons();
+    },
+
+    changeStatsDate(days) {
+        const dateInput = document.getElementById('stats-date-select');
+        if (!dateInput.value) return;
+
+        const currentDate = new Date(dateInput.value);
+        currentDate.setDate(currentDate.getDate() + days);
+        
+        const todayStr = this.getTodayDate();
+        const today = new Date(todayStr);
+        
+        // 미래 날짜 방지
+        if (currentDate > today) return;
+        
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const day = String(currentDate.getDate()).padStart(2, '0');
+        const newDateStr = `${year}-${month}-${day}`;
+        
+        dateInput.value = newDateStr;
+        
+        // 저장 및 로드 로직 실행 (bindEvents의 change 핸들러와 동일한 동작)
+        localStorage.setItem('saved_stats_date', newDateStr);
+        localStorage.setItem('last_stats_date_change', Date.now());
+        this.loadStats();
+    },
+
+    updateDateNavButtons() {
+        const dateInput = document.getElementById('stats-date-select');
+        const nextBtn = document.getElementById('stats-next-date');
+        if (!dateInput || !nextBtn) return;
+        
+        const selectedDate = dateInput.value;
+        const today = this.getTodayDate();
+        
+        nextBtn.disabled = (selectedDate >= today);
     },
 
     renderSubjectLegend(sessions) {

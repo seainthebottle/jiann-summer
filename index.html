@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StudyTimer - 공부 시간 관리</title>
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/style.css">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -126,7 +125,21 @@
                 <div class="stats-filters" style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
                     <div class="form-group" style="margin-bottom: 0;">
                         <label for="stats-date-select">기준일 선택:</label>
-                        <input type="date" id="stats-date-select">
+                        <div class="date-nav" style="display: flex; align-items: center; gap: 5px;">
+                            <button id="stats-prev-date" class="btn-icon" title="이전 날짜">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                            </button>
+                            <input type="date" id="stats-date-select" style="width: auto; padding: 8px 12px;">
+                            <button id="stats-next-date" class="btn-icon" title="다음 날짜">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
                         <label for="stats-subject-select">과목 필터:</label>

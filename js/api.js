@@ -79,11 +79,13 @@ const api = {
         return await this.request('/study/status');
     },
 
-    async getStats(userId, date, subjectId) {
+    async getStats(userId, startDate, endDate, subjectId) {
         const params = new URLSearchParams();
         if (userId) params.append('targetUserId', userId);
-        if (date) params.append('date', date);
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
         if (subjectId) params.append('subjectId', subjectId);
+
 
         const queryString = params.toString();
         const path = queryString ? `/study/stats?${queryString}` : '/study/stats';

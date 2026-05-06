@@ -1,5 +1,37 @@
 const db = require('../config/db');
 
+// DB에서 반환된 DATETIME 값을 UTC 기준 Date 객체로 변환합니다.
+// db.js의 timezone: '+00:00' 설정으로 드라이버는 DATETIME을 UTC Date로 반환합니다.
+// 만약 드라이버 설정에 관계없이 문자열로 반환된 경우를 위해 방어 처리를 추가합니다.
+const parseUTCDate = (datetimeVal) => {
+    if (!datetimeVal) return null;
+    // 이미 Date 객체이면 그대로 반환 (드라이버가 timezone: '+00:00'으로 정확히 변환했음)
+    if (datetimeVal instanceof Date) {
+        return datetimeVal;
+    }
+    // 문자열인 경우: ISO 형식('Z' 포함)이면 그대로, 아니면 'Z'를 붙여 UTC로 파싱
+    const str = datetimeVal.toString();
+    if (str.endsWith('Z')) {
+        return new Date(str);
+    }
+    // 'YYYY-MM-DD HH:mm:ss' 형태 처리 (드라이버가 문자열 반환 시)
+    return new Date(str.replace(' ', 'T') + 'Z');
+};
+
+
+// ISO 문자열을 MariaDB/MySQL DATETIME 형식('YYYY-MM-DD HH:mm:ss')으로 변환
+const isoToSQLDateTime = (isoStr) => {
+    const d = new Date(isoStr);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+};
+
+
+
+
+
+
+
 // 공부 시작
 exports.startSession = async (req, res) => {
     const { subject_id } = req.body;
@@ -15,9 +47,11 @@ exports.startSession = async (req, res) => {
         }
 
         await db.query(
-            "INSERT INTO study_sessions (user_id, subject_id, start_time) VALUES (?, ?, NOW())",
+            "INSERT INTO study_sessions (user_id, subject_id, start_time) VALUES (?, ?, UTC_TIMESTAMP())",
             [user_id, subject_id]
         );
+
+
         res.json({ message: '공부 시작!' });
     } catch (err) {
         res.status(500).json({ error: '서버 오류 발생' });
@@ -39,8 +73,10 @@ exports.stopSession = async (req, res) => {
         const session = active[0];
         
         // 진행 시간 계산 (초)
-        const diffCheck = await db.query("SELECT TIMESTAMPDIFF(SECOND, start_time, NOW()) as diff FROM study_sessions WHERE id = ?", [session.id]);
+        const diffCheck = await db.query("SELECT TIMESTAMPDIFF(SECOND, start_time, UTC_TIMESTAMP()) as diff FROM study_sessions WHERE id = ?", [session.id]);
         const diffSeconds = diffCheck[0].diff;
+
+
 
         if (diffSeconds <= 60) {
             // 1분 이하인 경우 세션 삭제
@@ -50,11 +86,13 @@ exports.stopSession = async (req, res) => {
 
         await db.query(
             `UPDATE study_sessions 
-             SET end_time = NOW(), 
+             SET end_time = UTC_TIMESTAMP(), 
                  duration_seconds = ?
              WHERE id = ?`,
             [diffSeconds, session.id]
         );
+
+
         res.json({ message: '공부 종료!' });
     } catch (err) {
         res.status(500).json({ error: '서버 오류 발생' });
@@ -72,7 +110,18 @@ exports.getStatus = async (req, res) => {
              WHERE s.user_id = ? AND s.end_time IS NULL`,
             [user_id]
         );
-        res.json({ active: active.length > 0 ? active[0] : null });
+        if (active.length > 0) {
+            const session = active[0];
+            // DB의 DATETIME(UTC)을 'Z'를 붙여 UTC로 정확히 파싱 후 ISO 스트링으로 응답
+            session.start_time = parseUTCDate(session.start_time).toISOString();
+            res.json({ active: session });
+        } else {
+            res.json({ active: null });
+        }
+
+
+
+
     } catch (err) {
         res.status(500).json({ error: '서버 오류 발생' });
     }
@@ -81,7 +130,12 @@ exports.getStatus = async (req, res) => {
 // 통계 조회 (일간, 주간, 월간 등)
 exports.getStats = async (req, res) => {
     let user_id = req.user.id;
-    const { targetUserId, date, subjectId } = req.query;
+    const { targetUserId, startDate, endDate, subjectId } = req.query;
+
+    // 필수 파라미터 체크
+    if (!startDate || !endDate) {
+        return res.status(400).json({ error: 'startDate와 endDate가 필요합니다.' });
+    }
 
     // 관리자이면서 targetUserId가 제공된 경우 해당 사용자의 통계 조회
     if (req.user.role === 'admin' && targetUserId) {
@@ -89,25 +143,31 @@ exports.getStats = async (req, res) => {
     }
 
     try {
-        let baseDate = (date && date.trim()) || null;
-        const targetDateStr = baseDate ? baseDate : new Date().toLocaleDateString('en-CA');
-        const rangeStart = `${targetDateStr} 00:00:00`;
-        const rangeEnd = `${targetDateStr} 23:59:59`;
+        const rangeStart = startDate;
+        const rangeEnd = endDate;
         
-        console.log(`[Stats Debug] TargetDate: '${targetDateStr}', Range: '${rangeStart}' ~ '${rangeEnd}', SubjectId: ${subjectId || 'All'}`);
+        console.log(`[Stats Debug] UTC Range: '${rangeStart}' ~ '${rangeEnd}', SubjectId: ${subjectId || 'All'}`);
+
+
 
         // 1. 선택일 시간대별 공부 분포 (24시간 파이 차트용)
         let sessionsQuery = `
-            SELECT s.start_time, IF(s.end_time IS NULL, NOW(), s.end_time) as actual_end, 
+            SELECT s.start_time, IF(s.end_time IS NULL, UTC_TIMESTAMP(), s.end_time) as actual_end, 
                    sub.name as subject_name, sub.color,
                    (s.end_time IS NULL) as is_active
             FROM study_sessions s
             LEFT JOIN subjects sub ON s.subject_id = sub.id
             WHERE s.user_id = ? 
-              AND s.start_time <= CAST(? AS DATETIME) 
-              AND IFNULL(s.end_time, NOW()) >= CAST(? AS DATETIME)
+              AND s.start_time <= ? 
+              AND IFNULL(s.end_time, UTC_TIMESTAMP()) >= ?
         `;
-        let sessionsParams = [user_id, rangeEnd, rangeStart];
+        // WHERE 절의 파라미터 바인딩에도 SQL 호환 포맷으로 변환
+        const sqlRangeStart = isoToSQLDateTime(rangeStart);
+        const sqlRangeEnd = isoToSQLDateTime(rangeEnd);
+        let sessionsParams = [user_id, sqlRangeEnd, sqlRangeStart];
+
+
+
         if (subjectId && subjectId !== 'null' && subjectId !== '') {
             sessionsQuery += ` AND s.subject_id = ?`;
             sessionsParams.push(subjectId);
@@ -122,8 +182,10 @@ exports.getStats = async (req, res) => {
         let manualDailyTotal = 0;
         const sessions = [];
         rawSessions.forEach((session, idx) => {
-            let start = new Date(session.start_time);
-            let end = new Date(session.actual_end);
+            // DB의 DATETIME(UTC)을 'Z'를 붙여 UTC 기준 Date 객체로 변환
+            let start = parseUTCDate(session.start_time);
+            let end = parseUTCDate(session.actual_end);
+
             
             if (start < dayStart) start = dayStart;
             if (end > dayEnd) end = dayEnd;
@@ -141,29 +203,36 @@ exports.getStats = async (req, res) => {
                 end: end.toISOString(),
                 is_active: !!session.is_active
             });
+
         });
+
         console.log(`[Stats Debug] Manual JS Daily Total: ${manualDailyTotal}s`);
 
         // 2. 일간, 주간, 월간 총합 (범위 내 시간만 정밀 계산)
         // range_start와 range_end 사이의 시간만 추출하는 표현식
         // rStart와 rEnd는 SQL 문법에 맞는 형태(예: '?' 또는 'DATE_SUB(...)')여야 함
         const getRangeDuration = (startCol, endCol, rStart, rEnd) => {
-            const actualEnd = `IFNULL(${endCol}, NOW())`;
-            // CAST를 사용하여 데이터 타입 명시
-            const startVal = rStart.includes('?') ? `CAST(${rStart} AS DATETIME)` : rStart;
-            const endVal = rEnd.includes('?') ? `CAST(${rEnd} AS DATETIME)` : rEnd;
-            return `GREATEST(0, TIMESTAMPDIFF(SECOND, GREATEST(${startCol}, ${startVal}), LEAST(${actualEnd}, ${endVal})))`;
+            // ISO 문자열을 MariaDB 호환 DATETIME 형식으로 변환하여 SQL에 삽입
+            const sqlStart = isoToSQLDateTime(rStart);
+            const sqlEnd = isoToSQLDateTime(rEnd);
+            const actualEnd = `IFNULL(${endCol}, UTC_TIMESTAMP())`;
+            return `GREATEST(0, TIMESTAMPDIFF(SECOND, GREATEST(${startCol}, '${sqlStart}'), LEAST(${actualEnd}, '${sqlEnd}')))`;
         };
 
-        // 일간 합계 (선택한 날짜의 00:00:00 ~ 23:59:59)
+
+
+        // 일간 합계 (선택한 날짜의 로컬 범위 -> UTC 범위)
         let dailyQuery = `
-            SELECT COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', '?', '?')}), 0) as total 
+            SELECT COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', rangeStart, rangeEnd)}), 0) as total 
             FROM study_sessions s 
             WHERE s.user_id = ? 
-              AND s.start_time <= CAST(? AS DATETIME) 
-              AND IFNULL(s.end_time, NOW()) >= CAST(? AS DATETIME)
+              AND s.start_time <= ? 
+              AND IFNULL(s.end_time, UTC_TIMESTAMP()) >= ?
         `;
-        let dailyParams = [rangeStart, rangeEnd, user_id, rangeEnd, rangeStart];
+
+        let dailyParams = [user_id, sqlRangeEnd, sqlRangeStart];
+
+
         if (subjectId && subjectId !== 'null' && subjectId !== '') {
             dailyQuery += " AND s.subject_id = ?";
             dailyParams.push(subjectId);
@@ -176,21 +245,26 @@ exports.getStats = async (req, res) => {
         const finalDailyTotal = (sqlDailyTotal === 0 && manualDailyTotal > 0) ? manualDailyTotal : sqlDailyTotal;
         
         // 주간 합계 (최근 7일)
-        const weeklyStart = baseDate ? `DATE_SUB(?, INTERVAL 6 DAY)` : "DATE_SUB(CURDATE(), INTERVAL 6 DAY)";
-        const weeklyEnd = rangeEnd;
+        // 클라이언트에서 넘겨준 rangeStart(기준일 00:00 UTC)를 기준으로 6일 전 계산
+        const weeklyStartDate = new Date(new Date(rangeStart).getTime() - 6 * 86400000);
+        const weeklyStartUTC = weeklyStartDate.toISOString();
+        const weeklyEndUTC = rangeEnd;
+        // SQL 바인딩용 SQL 호환 포맷으로 변환
+        const sqlWeeklyStart = isoToSQLDateTime(weeklyStartUTC);
+        const sqlWeeklyEnd = isoToSQLDateTime(weeklyEndUTC);
+
+
+
         let weeklyQuery = `
-            SELECT COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', weeklyStart, '?')}), 0) as total 
+            SELECT COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', weeklyStartUTC, weeklyEndUTC)}), 0) as total 
             FROM study_sessions s 
             WHERE s.user_id = ? 
               AND s.start_time <= ? 
-              AND IFNULL(s.end_time, NOW()) >= ${weeklyStart}
+              AND IFNULL(s.end_time, UTC_TIMESTAMP()) >= ?
         `;
-        let weeklyParams = [];
-        if (baseDate) weeklyParams.push(rangeStart); // getRangeDuration용 weeklyStart(?)
-        weeklyParams.push(weeklyEnd); // getRangeDuration용 weeklyEnd(?)
-        weeklyParams.push(user_id);
-        weeklyParams.push(weeklyEnd); // WHERE s.start_time <= ?
-        if (baseDate) weeklyParams.push(rangeStart); // WHERE ... >= DATE_SUB(?, ...)
+        let weeklyParams = [user_id, sqlWeeklyEnd, sqlWeeklyStart];
+
+
 
         if (subjectId) {
             weeklyQuery += " AND s.subject_id = ?";
@@ -199,21 +273,25 @@ exports.getStats = async (req, res) => {
         const weeklyTotalResult = await db.query(weeklyQuery, weeklyParams);
 
         // 월간 합계 (최근 30일)
-        const monthlyStart = baseDate ? `DATE_SUB(?, INTERVAL 29 DAY)` : "DATE_SUB(CURDATE(), INTERVAL 29 DAY)";
-        const monthlyEnd = rangeEnd;
+        const monthlyStartDate = new Date(new Date(rangeStart).getTime() - 29 * 86400000);
+        const monthlyStartUTC = monthlyStartDate.toISOString();
+        const monthlyEndUTC = rangeEnd;
+        // SQL 바인딩용 SQL 호호 포맷으로 변환
+        const sqlMonthlyStart = isoToSQLDateTime(monthlyStartUTC);
+        const sqlMonthlyEnd = isoToSQLDateTime(monthlyEndUTC);
+
+
+
         let monthlyQuery = `
-            SELECT COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', monthlyStart, '?')}), 0) as total 
+            SELECT COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', monthlyStartUTC, monthlyEndUTC)}), 0) as total 
             FROM study_sessions s 
             WHERE s.user_id = ? 
               AND s.start_time <= ? 
-              AND IFNULL(s.end_time, NOW()) >= ${monthlyStart}
+              AND IFNULL(s.end_time, UTC_TIMESTAMP()) >= ?
         `;
-        let monthlyParams = [];
-        if (baseDate) monthlyParams.push(rangeStart);
-        monthlyParams.push(monthlyEnd);
-        monthlyParams.push(user_id);
-        monthlyParams.push(monthlyEnd);
-        if (baseDate) monthlyParams.push(rangeStart);
+        let monthlyParams = [user_id, sqlMonthlyEnd, sqlMonthlyStart];
+
+
 
         if (subjectId) {
             monthlyQuery += " AND s.subject_id = ?";
@@ -223,10 +301,12 @@ exports.getStats = async (req, res) => {
 
         // 3. 전체 누적 합계 (모든 시간)
         let totalQuery = `
-            SELECT COALESCE(SUM(IFNULL(s.duration_seconds, TIMESTAMPDIFF(SECOND, s.start_time, NOW()))), 0) as total 
+            SELECT COALESCE(SUM(IFNULL(s.duration_seconds, TIMESTAMPDIFF(SECOND, s.start_time, UTC_TIMESTAMP()))), 0) as total 
             FROM study_sessions s 
             WHERE s.user_id = ?
         `;
+
+
         let totalParams = [user_id];
         if (subjectId) {
             totalQuery += " AND s.subject_id = ?";
@@ -243,9 +323,9 @@ exports.getStats = async (req, res) => {
             monthlyAvg: monthlyTotalResult[0].total / 30,
             cumulativeTotal: totalTotalResult[0].total,
             debug: {
-                targetDate: targetDateStr,
                 range: { start: rangeStart, end: rangeEnd },
                 manualDailyTotal,
+
                 sqlDailyTotal: sqlDailyTotal,
                 finalDailyTotal: finalDailyTotal,
                 sessionCount: sessions.length,

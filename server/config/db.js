@@ -2,13 +2,20 @@ const mariadb = require('mariadb');
 require('dotenv').config();
 
 // MariaDB 커넥션 풀 설정
+// timezone: '+00:00': 커넥션의 시간대를 UTC로 설정
+// dateStrings: true: DATETIME 컬럼을 JS Date 객체로 자동 변환하지 않고 문자열로 반환
+//   → 드라이버가 로컬 타임존으로 잘못 해석하는 것을 원천 차단
+//   → parseUTCDate()에서 'Z'를 붙여 명시적으로 UTC 파싱함
 const pool = mariadb.createPool({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME || 'study_db',
-    connectionLimit: 5
+    connectionLimit: 5,
+    timezone: '+00:00',
+    dateStrings: true
 });
+
 
 module.exports = {
     // 쿼리 실행 헬퍼 함수

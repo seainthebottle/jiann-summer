@@ -103,6 +103,8 @@ const appState = {
         
         const saveDateAndLoad = () => {
             localStorage.setItem('saved_stats_date', dateSelect.value);
+            // 사용자가 직접 날짜를 변경한 시간을 기록 (5분 유지 로직용)
+            localStorage.setItem('last_stats_date_change', Date.now());
             this.loadStats();
         };
 
@@ -136,13 +138,36 @@ const appState = {
         this.loadSubjects();
         this.checkActiveSession();
         
-        // 통계 기준일 기본값을 오늘로 설정 (또는 저장된 값 복원)
-        const savedDate = localStorage.getItem('saved_stats_date');
-        const now = new Date();
-        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-        document.getElementById('stats-date-select').value = savedDate || today;
-        
         window.timer.init();
+    },
+
+    getTodayDate() {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    },
+
+    updateStatsDateIfExpired() {
+        const lastChange = localStorage.getItem('last_stats_date_change');
+        const now = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+        const dateInput = document.getElementById('stats-date-select');
+        const today = this.getTodayDate();
+
+        if (!lastChange || (now - parseInt(lastChange) > fiveMinutes)) {
+            // 5분이 지났거나 변경 기록이 없으면 오늘로 설정
+            if (dateInput) {
+                dateInput.value = today;
+                localStorage.setItem('saved_stats_date', today);
+            }
+        } else {
+            // 5분 이내라면 저장된 값 유지
+            const savedDate = localStorage.getItem('saved_stats_date');
+            if (dateInput && savedDate) {
+                dateInput.value = savedDate;
+            } else if (dateInput) {
+                dateInput.value = today;
+            }
+        }
     },
 
     showPage(pageId) {
@@ -156,6 +181,9 @@ const appState = {
 
         // 페이지별 데이터 로드
         if (pageId === 'stats') {
+            // 통계 페이지로 전환될 때 날짜 로직 적용
+            this.updateStatsDateIfExpired();
+
             if (this.user.role === 'admin') {
                 document.getElementById('admin-user-select-container').classList.remove('hidden');
                 this.loadAdminUserSelect();
@@ -245,10 +273,15 @@ const appState = {
     async loadStats() {
         // 관리자가 명시적으로 사용자를 선택하지 않았을 경우, 현재 드롭다운의 값을 사용하거나 기본값(본인) 사용
         const userId = this.user.role === 'admin' ? document.getElementById('admin-user-select').value : null;
-        const date = document.getElementById('stats-date-select').value;
+        const localDate = document.getElementById('stats-date-select').value;
         const subjectId = document.getElementById('stats-subject-select').value;
         
-        const stats = await api.getStats(userId, date, subjectId);
+        // 로컬 날짜의 시작과 끝을 ISO(UTC) 문자열로 변환
+        const startDate = new Date(`${localDate}T00:00:00`).toISOString();
+        const endDate = new Date(`${localDate}T23:59:59.999`).toISOString();
+        
+        const stats = await api.getStats(userId, startDate, endDate, subjectId);
+
         
         // 시간 포맷 헬퍼 (초 -> 시분초)
         const format = (sec) => {
@@ -263,7 +296,8 @@ const appState = {
         document.getElementById('stat-weekly-avg').textContent = format(stats.weeklyAvg);
         document.getElementById('stat-monthly-avg').textContent = format(stats.monthlyAvg);
 
-        window.charts.renderDailyPie(stats.sessions, date);
+        window.charts.renderDailyPie(stats.sessions, localDate);
+
     },
 
     async loadAdminUserSelect() {
@@ -378,8 +412,12 @@ const appState = {
         
         try {
             // 1. 오늘 총 공부 시간 로드
-            const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-            const totalStats = await api.getStats(null, today, null);
+            const todayLocal = this.getTodayDate();
+            const startUTC = new Date(`${todayLocal}T00:00:00`).toISOString();
+            const endUTC = new Date(`${todayLocal}T23:59:59.999`).toISOString();
+
+            const totalStats = await api.getStats(null, startUTC, endUTC, null);
+
             let totalTime = Number(totalStats.dailyTotal) || 0;
             
             // 현재 공부 중인 경우, 서버에서 받아온 '오늘 총합'에는 이미 현재 세션의 시간이 포함되어 있음.
@@ -398,7 +436,8 @@ const appState = {
             }
 
             // 2. 해당 과목의 오늘 공부 시간 로드
-            const subjectStats = await api.getStats(null, today, subjectId);
+            const subjectStats = await api.getStats(null, startUTC, endUTC, subjectId);
+
             let subjectTime = Number(subjectStats.dailyTotal) || 0;
             const baseSubjectTime = subjectTime - currentDiff;
             

@@ -1,10 +1,13 @@
 const appState = {
     user: null,
     currentPage: 'auth',
+    version: 'v4',
 
     async init() {
+        console.log(`App Initialized - Version: ${this.version}`);
         this.bindEvents();
         this.initTheme();
+        this.registerServiceWorker();
 
         // 자동 로그인 확인
         if (api.getToken()) {
@@ -575,6 +578,58 @@ const appState = {
         const next = current === 'light' ? 'dark' : 'light';
         document.body.className = `${next}-theme`;
         localStorage.setItem('theme', next);
+    },
+
+    /**
+     * 서비스 워커 등록 및 업데이트 관리
+     */
+    registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('SW registered: ', registration);
+
+                        // 주기적으로 업데이트 확인 (예: 30분마다)
+                        setInterval(() => {
+                            registration.update();
+                        }, 1000 * 60 * 30);
+
+                        // 앱이 포그라운드로 올 때마다 업데이트 확인 (iOS Safari PWA 대응)
+                        document.addEventListener('visibilitychange', () => {
+                            if (document.visibilityState === 'visible') {
+                                registration.update();
+                            }
+                        });
+
+                        // 업데이트 확인
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // 새로운 서비스 워커가 설치되었고 제어 중인 이전 워커가 있는 경우 (업데이트)
+                                    console.log('New content is available; please refresh.');
+                                    // 자동으로 새로고침하여 적용 (사용자가 원할 때 수동으로 하게 할 수도 있음)
+                                    // 여기서는 "새 버전으로 갱신되도록 해줘"라는 요청에 따라 자동 새로고침 유도
+                                }
+                            });
+                        });
+                    })
+                    .catch(registrationError => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+
+            // 서비스 워커가 업데이트되어 제어권이 변경되었을 때 페이지 새로고침
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    refreshing = true;
+                    console.log('Controller changed, reloading page...');
+                    window.location.reload();
+                }
+            });
+        }
     }
 };
 

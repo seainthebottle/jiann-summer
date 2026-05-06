@@ -40,15 +40,22 @@ app.use('/js', express.static(path.join(__dirname, '../js')));
 app.use('/assets', express.static(path.join(__dirname, '../assets')));
 
 // 2. 루트 디렉토리의 파일들 (sw.js, index.html 등) 제공
+app.get('/sw.js', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(__dirname, '../sw.js'));
+});
 app.use(express.static(path.join(__dirname, '../')));
 
 // 메인 페이지 (index.html) 제공
 app.get('/', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.sendFile(path.join(__dirname, '../index.html'));
 });
 
 // /index.html 요청에 대한 대응
 app.get('/index.html', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.sendFile(path.join(__dirname, '../index.html'));
 });
 

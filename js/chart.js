@@ -1,13 +1,12 @@
 let pieChart;
+let animationFrameId;
+let gradientOffset = 0;
 
 const charts = {
     renderDailyPie(sessions, baseDateStr) {
-        const ctx = document.getElementById('daily-pie-chart').getContext('2d');
+        const canvas = document.getElementById('daily-pie-chart');
+        const ctx = canvas.getContext('2d');
         
-        if (pieChart) {
-            pieChart.destroy();
-        }
-
         const targetDateStr = baseDateStr || new Date().toLocaleDateString('en-CA');
         const dayStart = new Date(targetDateStr + 'T00:00:00').getTime();
         const dayEnd = new Date(targetDateStr + 'T23:59:59.999').getTime();
@@ -16,6 +15,7 @@ const charts = {
         const backgroundColors = [];
         const labels = [];
         const tooltipLabels = [];
+        const sessionStatus = []; // 각 조각의 active 여부 저장
 
         let currentTime = dayStart;
 
@@ -33,6 +33,7 @@ const charts = {
                 backgroundColors.push('rgba(233, 236, 239, 0.2)');
                 labels.push('빈 시간');
                 tooltipLabels.push('');
+                sessionStatus.push({ active: false, color: 'rgba(233, 236, 239, 0.2)' });
             }
 
             // 공부 세션 조각
@@ -40,8 +41,9 @@ const charts = {
             if (studyMins > 0) {
                 dataValues.push(studyMins);
                 backgroundColors.push(session.color);
-                labels.push(session.subject_name);
-                tooltipLabels.push(`${session.subject_name}: ${Math.floor(studyMins)}분`);
+                labels.push(session.is_active ? `${session.subject_name} (Active)` : session.subject_name);
+                tooltipLabels.push(`${session.subject_name}: ${Math.floor(studyMins)}분${session.is_active ? ' (진행중)' : ''}`);
+                sessionStatus.push({ active: session.is_active, color: session.color });
             }
 
             currentTime = end;
@@ -54,6 +56,7 @@ const charts = {
             backgroundColors.push('rgba(233, 236, 239, 0.2)');
             labels.push('빈 시간');
             tooltipLabels.push('');
+            sessionStatus.push({ active: false, color: 'rgba(233, 236, 239, 0.2)' });
         }
 
         // 시계 문자판 플러그인
@@ -92,42 +95,106 @@ const charts = {
             }
         };
 
-        pieChart = new Chart(ctx, {
-            type: 'pie',
-            data: {
-                labels: labels,
-                datasets: [{
-                    data: dataValues,
-                    backgroundColor: backgroundColors,
-                    borderWidth: 0,
-                    borderColor: 'transparent'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                layout: {
-                    padding: 20 // 바깥쪽 라벨을 위한 여백
+        // Active 세션 그라데이션 애니메이션 플러그인
+        const activeGradientPlugin = {
+            id: 'activeGradient',
+            beforeDatasetDraw(chart, args) {
+                const { ctx, chartArea: { top, bottom, left, right, width, height } } = chart;
+                const meta = args.meta;
+                
+                meta.data.forEach((element, index) => {
+                    const status = sessionStatus[index];
+                    if (status && status.active) {
+                        const centerX = (left + right) / 2;
+                        const centerY = (top + bottom) / 2;
+                        
+                        // 동적 그라데이션 생성 (빛이 흐르는 느낌)
+                        const grad = ctx.createRadialGradient(
+                            centerX, centerY, element.innerRadius,
+                            centerX, centerY, element.outerRadius
+                        );
+                        
+                        const baseColor = status.color;
+                        grad.addColorStop(0, baseColor);
+                        // 사인 함수를 이용해 밝기가 변하는 지점을 이동시킴 (0.3 ~ 0.7 범위)
+                        const pulse = 0.5 + 0.3 * Math.sin(gradientOffset);
+                        grad.addColorStop(pulse, 'rgba(255, 255, 255, 0.45)');
+                        grad.addColorStop(1, baseColor);
+                        
+                        element.options.backgroundColor = grad;
+                    } else if (status) {
+                        element.options.backgroundColor = status.color;
+                    }
+                });
+            }
+        };
+
+        if (pieChart) {
+            pieChart.data.labels = labels;
+            pieChart.data.datasets[0].data = dataValues;
+            pieChart.options.plugins.tooltip.callbacks.label = (context) => ` ${tooltipLabels[context.dataIndex]}`;
+            pieChart.sessionStatus = sessionStatus; 
+            pieChart.update('none'); 
+        } else {
+            pieChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: dataValues,
+                        backgroundColor: backgroundColors,
+                        borderWidth: 0,
+                        borderColor: 'transparent'
+                    }]
                 },
-                plugins: {
-                    legend: {
-                        display: false
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    layout: {
+                        padding: 20
                     },
-                    tooltip: {
-                        filter: function(tooltipItem) {
-                            return tooltipLabels[tooltipItem.dataIndex] !== ''; // 빈 시간은 툴팁 숨김
-                        },
-                        callbacks: {
-                            label: function(context) {
-                                return ` ${tooltipLabels[context.dataIndex]}`;
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            filter: function(tooltipItem) {
+                                return tooltipLabels[tooltipItem.dataIndex] !== '';
+                            },
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${tooltipLabels[context.dataIndex]}`;
+                                }
                             }
                         }
                     }
-                }
-            },
-            plugins: [clockLabelsPlugin]
-        });
+                },
+                plugins: [clockLabelsPlugin, activeGradientPlugin]
+            });
+            pieChart.sessionStatus = sessionStatus;
+        }
+
+        // 애니메이션 루프 시작 (Active 세션이 있을 때만)
+        const hasActive = sessionStatus.some(s => s.active);
+        if (hasActive) {
+            if (!animationFrameId) {
+                const animate = () => {
+                    if (pieChart) {
+                        gradientOffset += 0.04; // 애니메이션 속도 조절
+                        pieChart.draw();
+                        animationFrameId = requestAnimationFrame(animate);
+                    }
+                };
+                animationFrameId = requestAnimationFrame(animate);
+            }
+        } else {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            if (pieChart) pieChart.draw();
+        }
     }
 };
 
 window.charts = charts;
+

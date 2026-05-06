@@ -61,9 +61,18 @@ const timer = {
         }
     },
 
-    updateDisplay() {
+    isRunning() {
+        return this.toggleBtn.classList.contains('btn-stop');
+    },
+
+    getCurrentDiff() {
+        if (!startTime) return 0;
         const now = new Date();
-        const diff = Math.floor((now - startTime) / 1000);
+        return Math.floor((now - startTime) / 1000);
+    },
+
+    updateDisplay() {
+        const diff = this.getCurrentDiff();
         
         const hours = String(Math.floor(diff / 3600)).padStart(2, '0');
         const minutes = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');

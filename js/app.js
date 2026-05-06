@@ -138,7 +138,8 @@ const appState = {
         
         // 통계 기준일 기본값을 오늘로 설정 (또는 저장된 값 복원)
         const savedDate = localStorage.getItem('saved_stats_date');
-        const today = new Date().toISOString().split('T')[0];
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         document.getElementById('stats-date-select').value = savedDate || today;
         
         window.timer.init();
@@ -162,8 +163,35 @@ const appState = {
                 document.getElementById('admin-user-select-container').classList.add('hidden');
                 this.loadStats();
             }
+            this.startStatsUpdateTimer();
+        } else {
+            this.stopStatsUpdateTimer();
         }
         if (pageId === 'admin') this.loadAdminData();
+    },
+
+    statsUpdateTimer: null,
+
+    startStatsUpdateTimer() {
+        this.stopStatsUpdateTimer();
+        
+        const now = new Date();
+        // 다음 0초까지의 지연 시간 계산 (ms)
+        const delay = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+        
+        this.statsUpdateTimer = setTimeout(() => {
+            if (this.currentPage === 'stats') {
+                this.loadStats();
+                this.startStatsUpdateTimer(); // 다음 1분 뒤 재실행
+            }
+        }, delay);
+    },
+
+    stopStatsUpdateTimer() {
+        if (this.statsUpdateTimer) {
+            clearTimeout(this.statsUpdateTimer);
+            this.statsUpdateTimer = null;
+        }
     },
 
     async loadSubjects() {
@@ -221,7 +249,7 @@ const appState = {
         const subjectId = document.getElementById('stats-subject-select').value;
         
         const stats = await api.getStats(userId, date, subjectId);
-
+        
         // 시간 포맷 헬퍼 (초 -> 시분초)
         const format = (sec) => {
             const h = Math.floor(sec / 3600);
@@ -352,10 +380,16 @@ const appState = {
             // 1. 오늘 총 공부 시간 로드
             const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
             const totalStats = await api.getStats(null, today, null);
-            // Number()를 사용하여 문자열 결합 방지
-            const totalTime = Number(totalStats.dailyTotal) || 0;
-            todayDisplay.textContent = this.formatSeconds(totalTime);
-            if (window.timer) window.timer.initialTodayTotalTime = totalTime;
+            let totalTime = Number(totalStats.dailyTotal) || 0;
+            
+            // 현재 공부 중인 경우, 서버에서 받아온 '오늘 총합'에는 이미 현재 세션의 시간이 포함되어 있음.
+            // timer.js에서 totalTime + diff를 수행하므로, 중복 방지를 위해 diff를 빼서 순수 '이전 세션들의 합'을 구함.
+            const isRunning = window.timer && window.timer.isRunning();
+            const currentDiff = isRunning ? window.timer.getCurrentDiff() : 0;
+            
+            const baseTotalTime = totalTime - currentDiff;
+            todayDisplay.textContent = this.formatSeconds(baseTotalTime + currentDiff);
+            if (window.timer) window.timer.initialTodayTotalTime = baseTotalTime;
 
             if (!subjectId) {
                 subjectCard.classList.add('hidden');
@@ -365,11 +399,12 @@ const appState = {
 
             // 2. 해당 과목의 오늘 공부 시간 로드
             const subjectStats = await api.getStats(null, today, subjectId);
-            const subjectTime = Number(subjectStats.dailyTotal) || 0;
+            let subjectTime = Number(subjectStats.dailyTotal) || 0;
+            const baseSubjectTime = subjectTime - currentDiff;
             
             const subjectName = subjectSelect.options[subjectSelect.selectedIndex].text;
             subjectLabel.textContent = `오늘 ${subjectName} 공부`;
-            subjectTodayDisplay.textContent = this.formatSeconds(subjectTime);
+            subjectTodayDisplay.textContent = this.formatSeconds(baseSubjectTime + currentDiff);
             subjectCard.classList.remove('hidden');
             
             // 타이머에서도 사용할 수 있도록 저장

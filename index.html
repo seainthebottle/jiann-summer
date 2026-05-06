@@ -1,18 +1,16 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StudyTimer - 공부 시간 관리</title>
     <link rel="stylesheet" href="css/style.css">
-    <link rel="manifest" href="assets/manifest.json">
-    <meta name="theme-color" content="#2563eb">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="assets/icons/app_icon.png">
+    <link rel="stylesheet" href="css/style.css">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body class="light-theme">
     <div id="app">
         <!-- 네비게이션 바 -->
@@ -21,20 +19,45 @@
                 <a href="#" class="logo" data-page="dashboard">StudyTimer</a>
                 <div class="nav-links">
                     <a href="#" data-page="dashboard" title="대시보드" style="display: flex; align-items: center;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                        </svg>
                     </a>
                     <a href="#" data-page="stats" title="통계" style="display: flex; align-items: center;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                        </svg>
                     </a>
-                    <a href="#" data-page="admin" id="admin-link" class="hidden" title="관리자" style="display: flex; align-items: center;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <a href="#" data-page="admin" id="admin-link" class="hidden" title="관리자"
+                        style="display: flex; align-items: center;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path
+                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                            </path>
+                        </svg>
                     </a>
 
                     <button id="theme-toggle" title="테마 변경" style="display: flex; align-items: center;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 0 0 20z"></path></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M12 2a10 10 0 0 0 0 20z"></path>
+                        </svg>
                     </button>
                     <button id="logout-btn" title="로그아웃" style="display: flex; align-items: center;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -52,7 +75,8 @@
                         </div>
                         <div class="form-group">
                             <label for="password">비밀번호</label>
-                            <input type="password" id="password" name="password" required autocomplete="current-password">
+                            <input type="password" id="password" name="password" required
+                                autocomplete="current-password">
                         </div>
                         <button type="submit" class="btn-primary">로그인</button>
                     </form>
@@ -76,7 +100,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="study-controls">
                     <div class="form-group">
                         <label for="subject-select">공부할 과목</label>
@@ -98,7 +122,7 @@
                         <select id="admin-user-select"></select>
                     </div>
                 </div>
-                
+
                 <div class="stats-filters" style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
                     <div class="form-group" style="margin-bottom: 0;">
                         <label for="stats-date-select">기준일 선택:</label>
@@ -121,7 +145,7 @@
                     <div class="stats-card">
                         <h3>시간 요약</h3>
                         <ul class="stats-list">
-                            <li>선택일 총 공부: <span id="stat-daily">0분</span></li>
+                            <li>선택일 총 공부시간: <span id="stat-daily">0분</span></li>
                             <li>최근 7일 합계: <span id="stat-weekly">0분</span></li>
                             <li>최근 30일 합계: <span id="stat-monthly">0분</span></li>
                             <li>주간 일평균: <span id="stat-weekly-avg">0분</span></li>
@@ -134,20 +158,23 @@
             <!-- 관리자 섹션 -->
             <section id="admin-page" class="hidden">
                 <h2>관리자 페이지</h2>
-                
+
                 <div class="admin-grid">
                     <div class="admin-card">
                         <h3>과목 관리</h3>
                         <form id="add-subject-form">
-                            <div style="display: flex; gap: 10px; width: 100%; align-items: center; margin-bottom: 15px;">
-                                <input type="color" id="new-subject-color" value="#339af0" style="padding: 0; width: 40px; height: 38px;">
-                                <input type="text" id="new-subject-name" placeholder="새 과목 이름" required style="margin-bottom: 0; flex: 1;">
+                            <div
+                                style="display: flex; gap: 10px; width: 100%; align-items: center; margin-bottom: 15px;">
+                                <input type="color" id="new-subject-color" value="#339af0"
+                                    style="padding: 0; width: 40px; height: 38px;">
+                                <input type="text" id="new-subject-name" placeholder="새 과목 이름" required
+                                    style="margin-bottom: 0; flex: 1;">
                                 <button type="submit" class="btn-small">추가</button>
                             </div>
                         </form>
                         <ul id="admin-subject-list" class="item-list"></ul>
                     </div>
-                    
+
                     <div class="admin-card">
                         <h3>사용자 관리</h3>
                         <form id="add-user-form">
@@ -177,15 +204,6 @@
     <script src="js/timer.js"></script>
     <script src="js/chart.js"></script>
     <script src="js/app.js"></script>
-    <script>
-        // 서비스 워커 등록
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(reg => console.log('Service Worker registered!'))
-                    .catch(err => console.log('Service Worker failed:', err));
-            });
-        }
-    </script>
 </body>
+
 </html>

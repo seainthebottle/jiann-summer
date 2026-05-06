@@ -89,36 +89,39 @@ exports.getStats = async (req, res) => {
     }
 
     try {
-        let baseDate = date || null;
+        let baseDate = (date && date.trim()) || null;
+        const targetDateStr = baseDate ? baseDate : new Date().toLocaleDateString('en-CA');
+        const rangeStart = `${targetDateStr} 00:00:00`;
+        const rangeEnd = `${targetDateStr} 23:59:59`;
         
+        console.log(`[Stats Debug] TargetDate: '${targetDateStr}', Range: '${rangeStart}' ~ '${rangeEnd}', SubjectId: ${subjectId || 'All'}`);
+
         // 1. 선택일 시간대별 공부 분포 (24시간 파이 차트용)
         let sessionsQuery = `
-            SELECT s.start_time, IF(s.end_time IS NULL, NOW(), s.end_time) as actual_end, sub.name as subject_name, sub.color
+            SELECT s.start_time, IF(s.end_time IS NULL, NOW(), s.end_time) as actual_end, 
+                   sub.name as subject_name, sub.color,
+                   (s.end_time IS NULL) as is_active
             FROM study_sessions s
             LEFT JOIN subjects sub ON s.subject_id = sub.id
-            WHERE s.user_id = ? AND IF(s.end_time IS NULL, TIMESTAMPDIFF(SECOND, s.start_time, NOW()), s.duration_seconds) > 60
+            WHERE s.user_id = ? 
+              AND s.start_time <= CAST(? AS DATETIME) 
+              AND IFNULL(s.end_time, NOW()) >= CAST(? AS DATETIME)
         `;
-        let sessionsParams = [user_id];
-        if (baseDate) {
-            sessionsQuery += ` AND DATE(s.start_time) <= ? AND DATE(IF(s.end_time IS NULL, NOW(), s.end_time)) >= ?`;
-            sessionsParams.push(baseDate, baseDate);
-        } else {
-            sessionsQuery += ` AND DATE(s.start_time) <= CURDATE() AND DATE(IF(s.end_time IS NULL, NOW(), s.end_time)) >= CURDATE()`;
-        }
-        if (subjectId) {
+        let sessionsParams = [user_id, rangeEnd, rangeStart];
+        if (subjectId && subjectId !== 'null' && subjectId !== '') {
             sessionsQuery += ` AND s.subject_id = ?`;
             sessionsParams.push(subjectId);
         }
         
         const rawSessions = await db.query(sessionsQuery, sessionsParams);
+        console.log(`[Stats Debug] rawSessions found: ${rawSessions.length}`);
         
-        // 날짜 범위를 00:00:00 ~ 23:59:59로 제한한 세션 목록 생성
-        let targetDateStr = baseDate ? baseDate : new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-        let dayStart = new Date(targetDateStr + 'T00:00:00');
-        let dayEnd = new Date(targetDateStr + 'T23:59:59.999');
+        let dayStart = new Date(rangeStart);
+        let dayEnd = new Date(rangeEnd);
         
+        let manualDailyTotal = 0;
         const sessions = [];
-        rawSessions.forEach(session => {
+        rawSessions.forEach((session, idx) => {
             let start = new Date(session.start_time);
             let end = new Date(session.actual_end);
             
@@ -126,61 +129,104 @@ exports.getStats = async (req, res) => {
             if (end > dayEnd) end = dayEnd;
             if (start >= end) return;
             
+            const duration = Math.floor((end - start) / 1000);
+            manualDailyTotal += duration;
+
+            console.log(`[Stats Debug] Session ${idx}: ${session.subject_name}, Start: ${start.toISOString()}, End: ${end.toISOString()}, Duration: ${duration}s, Active: ${session.is_active}`);
+            
             sessions.push({
                 subject_name: session.subject_name,
                 color: session.color || '#339af0',
                 start: start.toISOString(),
-                end: end.toISOString()
+                end: end.toISOString(),
+                is_active: !!session.is_active
             });
         });
+        console.log(`[Stats Debug] Manual JS Daily Total: ${manualDailyTotal}s`);
 
-        // 2. 일간, 주간, 월간 총합 및 평균 (완료된 세션만 합산하여 클라이언트 타이머와 이중 계산 방지)
-        let dailyQuery = "SELECT COALESCE(SUM(s.duration_seconds), 0) as total FROM study_sessions s WHERE s.user_id = ? AND s.duration_seconds > 60";
-        let dailyParams = [user_id];
-        if (baseDate) {
-            dailyQuery += " AND DATE(s.start_time) = ?";
-            dailyParams.push(baseDate);
-        } else {
-            dailyQuery += " AND DATE(s.start_time) = CURDATE()";
-        }
-        if (subjectId) {
+        // 2. 일간, 주간, 월간 총합 (범위 내 시간만 정밀 계산)
+        // range_start와 range_end 사이의 시간만 추출하는 표현식
+        // rStart와 rEnd는 SQL 문법에 맞는 형태(예: '?' 또는 'DATE_SUB(...)')여야 함
+        const getRangeDuration = (startCol, endCol, rStart, rEnd) => {
+            const actualEnd = `IFNULL(${endCol}, NOW())`;
+            // CAST를 사용하여 데이터 타입 명시
+            const startVal = rStart.includes('?') ? `CAST(${rStart} AS DATETIME)` : rStart;
+            const endVal = rEnd.includes('?') ? `CAST(${rEnd} AS DATETIME)` : rEnd;
+            return `GREATEST(0, TIMESTAMPDIFF(SECOND, GREATEST(${startCol}, ${startVal}), LEAST(${actualEnd}, ${endVal})))`;
+        };
+
+        // 일간 합계 (선택한 날짜의 00:00:00 ~ 23:59:59)
+        let dailyQuery = `
+            SELECT COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', '?', '?')}), 0) as total 
+            FROM study_sessions s 
+            WHERE s.user_id = ? 
+              AND s.start_time <= CAST(? AS DATETIME) 
+              AND IFNULL(s.end_time, NOW()) >= CAST(? AS DATETIME)
+        `;
+        let dailyParams = [rangeStart, rangeEnd, user_id, rangeEnd, rangeStart];
+        if (subjectId && subjectId !== 'null' && subjectId !== '') {
             dailyQuery += " AND s.subject_id = ?";
             dailyParams.push(subjectId);
         }
         const dailyTotalResult = await db.query(dailyQuery, dailyParams);
+        let sqlDailyTotal = Number(dailyTotalResult[0].total) || 0;
+        console.log(`[Stats Debug] Daily Query Total: ${sqlDailyTotal} seconds`);
+
+        // SQL 결과가 0인데 JS 계산 결과가 있다면 JS 결과를 우선 사용 (보험용)
+        const finalDailyTotal = (sqlDailyTotal === 0 && manualDailyTotal > 0) ? manualDailyTotal : sqlDailyTotal;
         
-        // 주간 합계
-        let weeklyQuery = "SELECT COALESCE(SUM(s.duration_seconds), 0) as total FROM study_sessions s WHERE s.user_id = ? AND s.duration_seconds > 60";
-        let weeklyParams = [user_id];
-        if (baseDate) {
-            weeklyQuery += " AND DATE(s.start_time) > DATE_SUB(?, INTERVAL 7 DAY) AND DATE(s.start_time) <= ?";
-            weeklyParams.push(baseDate, baseDate);
-        } else {
-            weeklyQuery += " AND start_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
-        }
+        // 주간 합계 (최근 7일)
+        const weeklyStart = baseDate ? `DATE_SUB(?, INTERVAL 6 DAY)` : "DATE_SUB(CURDATE(), INTERVAL 6 DAY)";
+        const weeklyEnd = rangeEnd;
+        let weeklyQuery = `
+            SELECT COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', weeklyStart, '?')}), 0) as total 
+            FROM study_sessions s 
+            WHERE s.user_id = ? 
+              AND s.start_time <= ? 
+              AND IFNULL(s.end_time, NOW()) >= ${weeklyStart}
+        `;
+        let weeklyParams = [];
+        if (baseDate) weeklyParams.push(rangeStart); // getRangeDuration용 weeklyStart(?)
+        weeklyParams.push(weeklyEnd); // getRangeDuration용 weeklyEnd(?)
+        weeklyParams.push(user_id);
+        weeklyParams.push(weeklyEnd); // WHERE s.start_time <= ?
+        if (baseDate) weeklyParams.push(rangeStart); // WHERE ... >= DATE_SUB(?, ...)
+
         if (subjectId) {
             weeklyQuery += " AND s.subject_id = ?";
             weeklyParams.push(subjectId);
         }
         const weeklyTotalResult = await db.query(weeklyQuery, weeklyParams);
 
-        // 월간 합계
-        let monthlyQuery = "SELECT COALESCE(SUM(s.duration_seconds), 0) as total FROM study_sessions s WHERE s.user_id = ? AND s.duration_seconds > 60";
-        let monthlyParams = [user_id];
-        if (baseDate) {
-            monthlyQuery += " AND DATE(s.start_time) > DATE_SUB(?, INTERVAL 30 DAY) AND DATE(s.start_time) <= ?";
-            monthlyParams.push(baseDate, baseDate);
-        } else {
-            monthlyQuery += " AND start_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
-        }
+        // 월간 합계 (최근 30일)
+        const monthlyStart = baseDate ? `DATE_SUB(?, INTERVAL 29 DAY)` : "DATE_SUB(CURDATE(), INTERVAL 29 DAY)";
+        const monthlyEnd = rangeEnd;
+        let monthlyQuery = `
+            SELECT COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', monthlyStart, '?')}), 0) as total 
+            FROM study_sessions s 
+            WHERE s.user_id = ? 
+              AND s.start_time <= ? 
+              AND IFNULL(s.end_time, NOW()) >= ${monthlyStart}
+        `;
+        let monthlyParams = [];
+        if (baseDate) monthlyParams.push(rangeStart);
+        monthlyParams.push(monthlyEnd);
+        monthlyParams.push(user_id);
+        monthlyParams.push(monthlyEnd);
+        if (baseDate) monthlyParams.push(rangeStart);
+
         if (subjectId) {
             monthlyQuery += " AND s.subject_id = ?";
             monthlyParams.push(subjectId);
         }
         const monthlyTotalResult = await db.query(monthlyQuery, monthlyParams);
 
-        // 3. 전체 누적 합계 (완료된 세션만)
-        let totalQuery = "SELECT COALESCE(SUM(s.duration_seconds), 0) as total FROM study_sessions s WHERE s.user_id = ? AND s.duration_seconds > 60";
+        // 3. 전체 누적 합계 (모든 시간)
+        let totalQuery = `
+            SELECT COALESCE(SUM(IFNULL(s.duration_seconds, TIMESTAMPDIFF(SECOND, s.start_time, NOW()))), 0) as total 
+            FROM study_sessions s 
+            WHERE s.user_id = ?
+        `;
         let totalParams = [user_id];
         if (subjectId) {
             totalQuery += " AND s.subject_id = ?";
@@ -188,15 +234,27 @@ exports.getStats = async (req, res) => {
         }
         const totalTotalResult = await db.query(totalQuery, totalParams);
 
-        res.json({
+        const responseData = {
             sessions,
-            dailyTotal: dailyTotalResult[0].total,
+            dailyTotal: finalDailyTotal,
             weeklyTotal: weeklyTotalResult[0].total,
             monthlyTotal: monthlyTotalResult[0].total,
-            weeklyAvg: dailyTotalResult[0].total / 7,
-            monthlyAvg: dailyTotalResult[0].total / 30,
-            cumulativeTotal: totalTotalResult[0].total
-        });
+            weeklyAvg: weeklyTotalResult[0].total / 7,
+            monthlyAvg: monthlyTotalResult[0].total / 30,
+            cumulativeTotal: totalTotalResult[0].total,
+            debug: {
+                targetDate: targetDateStr,
+                range: { start: rangeStart, end: rangeEnd },
+                manualDailyTotal,
+                sqlDailyTotal: sqlDailyTotal,
+                finalDailyTotal: finalDailyTotal,
+                sessionCount: sessions.length,
+                rawSessions: sessions
+            }
+        };
+
+        console.log(`[Stats Debug] Final Response sent with debug info`);
+        res.json(responseData);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: '통계 조회 중 오류 발생' });

@@ -33,18 +33,22 @@ app.use('/api', (req, res) => {
     res.status(404).json({ error: 'API 경로를 찾을 수 없습니다.' });
 });
 
-// 정적 파일 설정 (루트 디렉토리의 자산들)
+// 정적 파일 설정
+// 1. 특정 폴더 우선 제공
 app.use('/css', express.static(path.join(__dirname, '../css')));
 app.use('/js', express.static(path.join(__dirname, '../js')));
 app.use('/assets', express.static(path.join(__dirname, '../assets')));
 
-// 서비스 워커 라우팅: 루트에서 호출하지만 실제로는 js/sw.js 제공 (스코프 유지)
-app.get('/sw.js', (req, res) => {
-    res.sendFile(path.join(__dirname, '../js/sw.js'));
-});
+// 2. 루트 디렉토리의 파일들 (sw.js, index.html 등) 제공
+app.use(express.static(path.join(__dirname, '../')));
 
 // 메인 페이지 (index.html) 제공
 app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../index.html'));
+});
+
+// /index.html 요청에 대한 대응
+app.get('/index.html', (req, res) => {
     res.sendFile(path.join(__dirname, '../index.html'));
 });
 

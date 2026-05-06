@@ -39,3 +39,33 @@
 - **Rich Aesthetics**: 현대적이고 프리미엄한 느낌의 디자인을 지향합니다.
 - **Dynamic Design**: 호버 효과, 마이크로 애니메이션 등을 활용하여 생동감 있는 인터페이스를 구축합니다.
 - **Typography**: 브라우저 기본 폰트 대신 Google Fonts(Inter, Roboto 등)를 활용합니다.
+
+---
+
+## 5. 프로젝트 구조 (Project Structure)
+
+이 프로젝트는 다음과 같은 폴더 및 파일 구조로 구성되어 있습니다.
+
+### A. 클라이언트 (Frontend)
+- `index.html`: 메인 사용자 인터페이스
+- `css/`: 스타일시트 (`style.css`)
+- `js/`: 프론트엔드 로직
+    - `app.js`: 메인 애플리케이션 로직 및 UI 제어
+    - `api.js`: 백엔드 API와의 통신 담당
+    - `chart.js`: 통계 및 차트 렌더링
+    - `timer.js`: 공부 시간 측정을 위한 타이머 로직
+    - `sw.js`: PWA(Progressive Web App)를 위한 서비스 워커
+- `assets/`: 이미지 및 정적 자산
+
+### B. 서버 (Backend)
+- `server/server.js`: 서버 진입점 (Express 설정 및 서버 실행)
+- `server/routes/`: API 엔드포인트 정의 (auth, study, admin)
+- `server/controllers/`: 각 경로에 대한 비즈니스 로직 처리
+- `server/middleware/`: 인증(`auth`) 및 관리자(`admin`) 권한 검사 미들웨어
+- `server/config/`: 데이터베이스 연결 설정 (`db.js`)
+- `server/.env`: 환경 변수 설정 (포트, DB 정보 등)
+
+### C. 데이터베이스 및 기타
+- `database/schema.sql`: 데이터베이스 테이블 설계 스크립트
+- `README.md`: 프로젝트 개요 및 설치 가이드
+- `GEMINI.md`: 개발 원칙 및 프로젝트 구조 가이드 (본 문서)

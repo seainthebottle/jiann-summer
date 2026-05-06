@@ -102,8 +102,11 @@ const charts = {
                 const { ctx, chartArea: { top, bottom, left, right, width, height } } = chart;
                 const meta = args.meta;
                 
+                // chart.sessionStatus를 참조하여 클로저 문제 해결
+                const statusList = chart.sessionStatus || [];
+                
                 meta.data.forEach((element, index) => {
-                    const status = sessionStatus[index];
+                    const status = statusList[index];
                     if (status && status.active) {
                         const centerX = (left + right) / 2;
                         const centerY = (top + bottom) / 2;
@@ -129,10 +132,12 @@ const charts = {
         if (pieChart) {
             pieChart.data.labels = labels;
             pieChart.data.datasets[0].data = dataValues;
+            pieChart.data.datasets[0].backgroundColor = backgroundColors; // 배경색 배열 업데이트 추가
             pieChart.options.plugins.tooltip.callbacks.label = (context) => ` ${tooltipLabels[context.dataIndex]}`;
             pieChart.sessionStatus = sessionStatus; 
             pieChart.update('none'); 
         } else {
+
             pieChart = new Chart(ctx, {
                 type: 'pie',
                 data: {

@@ -298,6 +298,53 @@ const appState = {
 
         window.charts.renderDailyPie(stats.sessions, localDate);
 
+        // 과목별 범례 생성
+        this.renderSubjectLegend(stats.sessions);
+    },
+
+    renderSubjectLegend(sessions) {
+        const legendContainer = document.getElementById('subject-stats-legend');
+        if (!legendContainer) return;
+        legendContainer.innerHTML = '';
+
+        if (!sessions || sessions.length === 0) {
+            legendContainer.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.9rem;">기록된 데이터가 없습니다.</p>';
+            return;
+        }
+
+        // 과목별로 시간 합산
+        const summary = {};
+        sessions.forEach(s => {
+            if (!summary[s.subject_name]) {
+                summary[s.subject_name] = {
+                    time: 0,
+                    color: s.color
+                };
+            }
+            const duration = (new Date(s.end) - new Date(s.start)) / 1000;
+            summary[s.subject_name].time += duration;
+        });
+
+        Object.entries(summary).forEach(([name, data]) => {
+            const item = document.createElement('div');
+            item.className = 'legend-item';
+            item.style.display = 'flex';
+            item.style.alignItems = 'center';
+            item.style.justifyContent = 'space-between';
+            item.style.marginBottom = '10px';
+            item.style.padding = '8px';
+            item.style.borderRadius = '6px';
+            item.style.background = 'rgba(0,0,0,0.02)';
+
+            item.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${data.color};"></div>
+                    <span style="font-weight: 500; font-size: 0.95rem;">${name}</span>
+                </div>
+                <span style="font-weight: 600; color: var(--primary-color);">${this.formatSeconds(data.time)}</span>
+            `;
+            legendContainer.appendChild(item);
+        });
     },
 
     async loadAdminUserSelect() {

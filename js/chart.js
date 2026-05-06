@@ -108,17 +108,14 @@ const charts = {
                         const centerX = (left + right) / 2;
                         const centerY = (top + bottom) / 2;
                         
-                        // 동적 그라데이션 생성 (빛이 흐르는 느낌)
-                        const grad = ctx.createRadialGradient(
-                            centerX, centerY, element.innerRadius,
-                            centerX, centerY, element.outerRadius
-                        );
+                        // 동적 콘익 그라데이션 생성 (시계 방향으로 빛이 흐르는 느낌)
+                        const grad = ctx.createConicGradient(gradientOffset, centerX, centerY);
                         
                         const baseColor = status.color;
                         grad.addColorStop(0, baseColor);
-                        // 사인 함수를 이용해 밝기가 변하는 지점을 이동시킴 (0.3 ~ 0.7 범위)
-                        const pulse = 0.5 + 0.3 * Math.sin(gradientOffset);
-                        grad.addColorStop(pulse, 'rgba(255, 255, 255, 0.45)');
+                        grad.addColorStop(0.45, baseColor);
+                        grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.5)'); // 부드러운 하이라이트
+                        grad.addColorStop(0.55, baseColor);
                         grad.addColorStop(1, baseColor);
                         
                         element.options.backgroundColor = grad;
@@ -179,7 +176,7 @@ const charts = {
             if (!animationFrameId) {
                 const animate = () => {
                     if (pieChart) {
-                        gradientOffset += 0.04; // 애니메이션 속도 조절
+                        gradientOffset += 0.05; // 애니메이션 속도 조절
                         pieChart.draw();
                         animationFrameId = requestAnimationFrame(animate);
                     }

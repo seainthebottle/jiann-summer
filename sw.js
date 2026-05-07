@@ -1,15 +1,15 @@
-const CACHE_NAME = 'study-timer-v4';
+const CACHE_NAME = 'study-timer-v11';
 const ASSETS_TO_CACHE = [
-    '/',
-    '/index.html',
-    '/css/style.css',
-    '/js/api.js',
-    '/js/app.js',
-    '/js/timer.js',
-    '/js/chart.js',
-    '/assets/icons/app_icon.png',
-    '/assets/icons/app_icon.svg',
-    '/assets/manifest.json'
+    './',
+    'index.html',
+    'css/style.css',
+    'js/api.js',
+    'js/app.js',
+    'js/timer.js',
+    'js/chart.js',
+    'assets/icons/app_icon.png',
+    'assets/icons/app_icon.svg',
+    'assets/manifest.json'
 ];
 
 // 서비스 워커 설치 및 리소스 캐싱

@@ -11,8 +11,9 @@ const app = express();
 const PORT = process.env.PORT || 3020;
 
 // 미들웨어 설정
+// 미들웨어 설정
 app.use((req, res, next) => {
-    console.log(`[${new Date().toLocaleString()}] ${req.method} ${req.url}`);
+    console.log(`>>> [${new Date().toLocaleString()}] ${req.method} ${req.url} (Original: ${req.originalUrl})`);
     next();
 });
 app.use(cors());
@@ -24,12 +25,30 @@ const studyRoutes = require('./routes/study');
 const adminRoutes = require('./routes/admin');
 
 // API 라우트 등록 (정적 파일보다 먼저 등록하여 경로 겹침 방지)
+// 프록시 환경에서 /summer/api/... 처럼 들어오는 경우 /api/... 로 경로 보정
+app.use((req, res, next) => {
+    if (req.url.includes('/api/')) {
+        const apiIndex = req.url.indexOf('/api/');
+        if (apiIndex > 0) {
+            console.log(`[Path Fix] ${req.url} -> ${req.url.substring(apiIndex)}`);
+            req.url = req.url.substring(apiIndex);
+        }
+    }
+    next();
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/study', studyRoutes);
 app.use('/api/admin', adminRoutes);
 
 // API 404 핸들러 (API 요청 실패 시 JSON 반환)
+app.get('/api/test', (req, res) => {
+    console.log(`[API Test] Reachable!`);
+    res.json({ status: 'ok', message: 'Server is reachable' });
+});
+
 app.use('/api', (req, res) => {
+    console.log(`[API 404] ${req.method} ${req.url}`);
     res.status(404).json({ error: 'API 경로를 찾을 수 없습니다.' });
 });
 

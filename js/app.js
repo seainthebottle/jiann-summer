@@ -59,16 +59,16 @@ const appState = {
         // 테마 토글
         document.getElementById('theme-toggle').addEventListener('click', () => this.toggleTheme());
 
-        // 과목 추가 (관리자)
+        // 과목 추가 (모든 사용자)
         document.getElementById('add-subject-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('new-subject-name').value;
             const color = document.getElementById('new-subject-color').value;
             try {
-                await api.adminAddSubject(name, color);
+                await api.addSubject(name, color);
                 document.getElementById('new-subject-name').value = '';
-                this.loadAdminData();
-                this.loadSubjects(); // 일반 대시보드 과목 목록도 갱신
+                this.loadSubjectsPage();
+                this.loadSubjects(); // 대시보드 과목 드롭다운도 갱신
             } catch (err) {
                 alert(err.message);
             }
@@ -89,6 +89,27 @@ const appState = {
             } catch (err) {
                 alert(err.message);
             }
+        });
+
+        // 관리자 과목 추가
+        document.getElementById('admin-add-subject-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('admin-subject-user-select').value;
+            const name = document.getElementById('admin-new-subject-name').value;
+            const color = document.getElementById('admin-new-subject-color').value;
+            if (!userId) return alert('사용자를 선택하세요.');
+            try {
+                await api.adminAddSubject(userId, name, color);
+                document.getElementById('admin-new-subject-name').value = '';
+                this.loadAdminSubjects();
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        // 관리자 과목 사용자 선택
+        document.getElementById('admin-subject-user-select').addEventListener('change', () => {
+            this.loadAdminSubjects();
         });
 
         // 통계 페이지 사용자 선택 (관리자 전용)
@@ -133,6 +154,8 @@ const appState = {
 
     onLoginSuccess() {
         document.getElementById('navbar').classList.remove('hidden');
+        // 과목 관리는 모든 로그인 사용자에게 공개
+        document.getElementById('subjects-link').classList.remove('hidden');
         if (this.user.role === 'admin') {
             document.getElementById('admin-link').classList.remove('hidden');
         }
@@ -202,6 +225,7 @@ const appState = {
         } else {
             this.stopStatsUpdateTimer();
         }
+        if (pageId === 'subjects') this.loadSubjectsPage();
         if (pageId === 'admin') this.loadAdminData();
     },
 
@@ -436,9 +460,84 @@ const appState = {
             userList.appendChild(li);
         });
 
-        const subjects = await api.getSubjects();
+        // 과목 관리 사용자 드롭다운 동기화
+        const subjectUserSelect = document.getElementById('admin-subject-user-select');
+        const currentVal = subjectUserSelect.value;
+        subjectUserSelect.innerHTML = '';
+        users.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.id;
+            opt.textContent = `${u.username} (${u.role})`;
+            subjectUserSelect.appendChild(opt);
+        });
+        // 기존 선택값 유지, 없으면 첫 번째 사용자
+        if (currentVal && Array.from(subjectUserSelect.options).some(o => o.value === currentVal)) {
+            subjectUserSelect.value = currentVal;
+        }
+        this.loadAdminSubjects();
+    },
+
+    // 관리자 - 선택된 사용자의 과목 목록 로드
+    async loadAdminSubjects() {
+        const userId = document.getElementById('admin-subject-user-select').value;
+        if (!userId) return;
+        const subjects = await api.adminGetSubjects(userId);
         const subList = document.getElementById('admin-subject-list');
         subList.innerHTML = '';
+
+        if (subjects.length === 0) {
+            subList.innerHTML = '<li style="color: var(--text-secondary); padding: 10px 0;">등록된 과목이 없습니다.</li>';
+            return;
+        }
+
+        subjects.forEach(s => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div style="display: flex; gap: 10px; align-items: center; width: 100%;">
+                    <input type="color" id="admin-subj-color-${s.id}" value="${s.color || '#339af0'}" style="padding: 0; width: 30px; height: 30px;">
+                    <input type="text" id="admin-subj-name-${s.id}" value="${s.name}" style="flex: 1; padding: 5px; margin-bottom: 0;">
+                    <button class="btn-small" onclick="appState.adminUpdateSubject(${s.id})" style="padding: 5px 10px;">수정</button>
+                    <button class="delete-btn" onclick="appState.adminDeleteSubject(${s.id})" style="padding: 5px 10px;">삭제</button>
+                </div>
+            `;
+            subList.appendChild(li);
+        });
+    },
+
+    async adminUpdateSubject(id) {
+        const name = document.getElementById(`admin-subj-name-${id}`).value;
+        const color = document.getElementById(`admin-subj-color-${id}`).value;
+        if (!name) return alert('과목 이름을 입력하세요.');
+        try {
+            await api.adminUpdateSubject(id, name, color);
+            alert('과목이 수정되었습니다.');
+            this.loadAdminSubjects();
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async adminDeleteSubject(id) {
+        if (!confirm('정말 삭제하시겠습니까?')) return;
+        try {
+            await api.adminDeleteSubject(id);
+            this.loadAdminSubjects();
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    // 과목 관리 페이지 로드 (모든 사용자)
+    async loadSubjectsPage() {
+        const subjects = await api.getSubjects();
+        const subList = document.getElementById('subject-manage-list');
+        subList.innerHTML = '';
+
+        if (subjects.length === 0) {
+            subList.innerHTML = '<li style="color: var(--text-secondary); padding: 10px 0;">등록된 과목이 없습니다. 위에서 추가해 주세요.</li>';
+            return;
+        }
+
         subjects.forEach(s => {
             const li = document.createElement('li');
             li.innerHTML = `
@@ -458,9 +557,9 @@ const appState = {
         const color = document.getElementById(`subj-color-${id}`).value;
         if (!name) return alert('과목 이름을 입력하세요.');
         try {
-            await api.adminUpdateSubject(id, name, color);
+            await api.updateSubject(id, name, color);
             alert('과목이 수정되었습니다.');
-            this.loadAdminData();
+            this.loadSubjectsPage();
             this.loadSubjects();
         } catch (err) {
             alert(err.message);
@@ -480,8 +579,8 @@ const appState = {
     async deleteSubject(id) {
         if (!confirm('정말 삭제하시겠습니까?')) return;
         try {
-            await api.adminDeleteSubject(id);
-            this.loadAdminData();
+            await api.deleteSubject(id);
+            this.loadSubjectsPage();
             this.loadSubjects();
         } catch (err) {
             alert(err.message);

@@ -341,12 +341,81 @@ exports.getStats = async (req, res) => {
     }
 };
 
-// 과목 목록 조회
+// 과목 목록 조회 (로그인한 사용자 전용)
 exports.getSubjects = async (req, res) => {
     try {
-        const subjects = await db.query("SELECT * FROM subjects ORDER BY name ASC");
+        const subjects = await db.query(
+            "SELECT * FROM subjects WHERE user_id = ? ORDER BY name ASC",
+            [req.user.id]
+        );
         res.json(subjects);
     } catch (err) {
         res.status(500).json({ error: '과목 조회 중 오류 발생' });
+    }
+};
+
+// 과목 추가 (로그인한 사용자 전용)
+exports.addSubject = async (req, res) => {
+    const { name, color } = req.body;
+    const user_id = req.user.id;
+    if (!name || !name.trim()) {
+        return res.status(400).json({ error: '과목 이름을 입력하세요.' });
+    }
+    try {
+        const subjectColor = color || '#339af0';
+        await db.query(
+            "INSERT INTO subjects (user_id, name, color) VALUES (?, ?, ?)",
+            [user_id, name.trim(), subjectColor]
+        );
+        res.status(201).json({ message: '과목 추가 성공' });
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: '이미 존재하는 과목 이름입니다.' });
+        }
+        res.status(500).json({ error: '과목 추가 중 오류 발생' });
+    }
+};
+
+// 과목 수정 (소유자만 가능)
+exports.updateSubject = async (req, res) => {
+    const { id } = req.params;
+    const { name, color } = req.body;
+    const user_id = req.user.id;
+    if (!name || !name.trim()) {
+        return res.status(400).json({ error: '과목 이름을 입력하세요.' });
+    }
+    try {
+        const result = await db.query(
+            "UPDATE subjects SET name = ?, color = ? WHERE id = ? AND user_id = ?",
+            [name.trim(), color, id, user_id]
+        );
+        // affectedRows가 0이면 해당 과목이 없거나 다른 사용자 소유
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: '과목을 찾을 수 없습니다.' });
+        }
+        res.json({ message: '과목 수정 성공' });
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: '이미 존재하는 과목 이름입니다.' });
+        }
+        res.status(500).json({ error: '과목 수정 중 오류 발생' });
+    }
+};
+
+// 과목 삭제 (소유자만 가능)
+exports.deleteSubject = async (req, res) => {
+    const { id } = req.params;
+    const user_id = req.user.id;
+    try {
+        const result = await db.query(
+            "DELETE FROM subjects WHERE id = ? AND user_id = ?",
+            [id, user_id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: '과목을 찾을 수 없습니다.' });
+        }
+        res.json({ message: '과목 삭제 성공' });
+    } catch (err) {
+        res.status(500).json({ error: '과목 삭제 중 오류 발생' });
     }
 };

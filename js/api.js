@@ -110,13 +110,20 @@ const api = {
         });
     },
 
-    async adminAddSubject(name, color) {
+    // 관리자 - 특정 사용자의 과목 조회
+    async adminGetSubjects(userId) {
+        return await this.request(`/admin/subjects?userId=${userId}`);
+    },
+
+    // 관리자 - 특정 사용자에게 과목 추가
+    async adminAddSubject(userId, name, color) {
         return await this.request('/admin/subjects', {
             method: 'POST',
-            body: JSON.stringify({ name, color })
+            body: JSON.stringify({ userId, name, color })
         });
     },
 
+    // 관리자 - 과목 수정
     async adminUpdateSubject(id, name, color) {
         return await this.request(`/admin/subjects/${id}`, {
             method: 'PUT',
@@ -124,8 +131,29 @@ const api = {
         });
     },
 
-    async adminDeleteSubject(subjectId) {
-        return await this.request('/admin/subjects/' + subjectId, {
+    // 관리자 - 과목 삭제
+    async adminDeleteSubject(id) {
+        return await this.request(`/admin/subjects/${id}`, {
+            method: 'DELETE'
+        });
+    },
+
+    async addSubject(name, color) {
+        return await this.request('/study/subjects', {
+            method: 'POST',
+            body: JSON.stringify({ name, color })
+        });
+    },
+
+    async updateSubject(id, name, color) {
+        return await this.request(`/study/subjects/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name, color })
+        });
+    },
+
+    async deleteSubject(subjectId) {
+        return await this.request('/study/subjects/' + subjectId, {
             method: 'DELETE'
         });
     }

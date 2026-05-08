@@ -9,8 +9,11 @@ router.use(authMiddleware, adminMiddleware); // 모든 관리자 API는 인증 �
 router.get('/users', adminController.getUsers);
 router.post('/users', adminController.addUser);
 router.delete('/users/:id', adminController.deleteUser);
-router.post('/subjects', adminController.addSubject);
-router.put('/subjects/:id', adminController.updateSubject);
-router.delete('/subjects/:id', adminController.deleteSubject);
+
+// 과목 관리 (관리자가 특정 사용자의 과목을 지정해 관리)
+router.get('/subjects', adminController.getSubjectsByUser);
+router.post('/subjects', adminController.addSubjectForUser);
+router.put('/subjects/:id', adminController.adminUpdateSubject);
+router.delete('/subjects/:id', adminController.adminDeleteSubject);
 
 module.exports = router;

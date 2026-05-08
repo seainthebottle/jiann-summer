@@ -34,6 +34,13 @@
                             <line x1="6" y1="20" x2="6" y2="14"></line>
                         </svg>
                     </a>
+                    <a href="#" data-page="subjects" id="subjects-link" class="hidden" title="과목 관리" style="display: flex; align-items: center;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                        </svg>
+                    </a>
                     <a href="#" data-page="admin" id="admin-link" class="hidden" title="관리자"
                         style="display: flex; align-items: center;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
@@ -178,13 +185,12 @@
                 </div>
             </section>
 
-            <!-- 관리자 섹션 -->
-            <section id="admin-page" class="hidden">
-                <h2>관리자 페이지</h2>
-
+            <!-- 과목 관리 섹션 (모든 사용자 접근 가능) -->
+            <section id="subjects-page" class="hidden">
+                <h2>과목 관리</h2>
                 <div class="admin-grid">
                     <div class="admin-card">
-                        <h3>과목 관리</h3>
+                        <h3>내 과목 목록</h3>
                         <form id="add-subject-form">
                             <div
                                 style="display: flex; gap: 10px; width: 100%; align-items: center; margin-bottom: 15px;">
@@ -195,9 +201,16 @@
                                 <button type="submit" class="btn-small">추가</button>
                             </div>
                         </form>
-                        <ul id="admin-subject-list" class="item-list"></ul>
+                        <ul id="subject-manage-list" class="item-list"></ul>
                     </div>
+                </div>
+            </section>
 
+            <!-- 관리자 섹션 -->
+            <section id="admin-page" class="hidden">
+                <h2>관리자 페이지</h2>
+
+                <div class="admin-grid">
                     <div class="admin-card">
                         <h3>사용자 관리</h3>
                         <form id="add-user-form">
@@ -216,6 +229,24 @@
                             <button type="submit" class="btn-small" style="width: 100%; padding: 12px;">추가</button>
                         </form>
                         <ul id="admin-user-list" class="item-list"></ul>
+                    </div>
+
+                    <div class="admin-card">
+                        <h3>과목 관리</h3>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label for="admin-subject-user-select">사용자 선택:</label>
+                            <select id="admin-subject-user-select"></select>
+                        </div>
+                        <form id="admin-add-subject-form">
+                            <div style="display: flex; gap: 10px; width: 100%; align-items: center; margin-bottom: 15px;">
+                                <input type="color" id="admin-new-subject-color" value="#339af0"
+                                    style="padding: 0; width: 40px; height: 38px;">
+                                <input type="text" id="admin-new-subject-name" placeholder="새 과목 이름" required
+                                    style="margin-bottom: 0; flex: 1;">
+                                <button type="submit" class="btn-small">추가</button>
+                            </div>
+                        </form>
+                        <ul id="admin-subject-list" class="item-list"></ul>
                     </div>
                 </div>
             </section>

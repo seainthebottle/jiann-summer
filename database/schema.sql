@@ -14,12 +14,14 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 과목 테이블
+-- 과목 테이블 (사용자별 전용)
 CREATE TABLE IF NOT EXISTS subjects (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
+    user_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
     color VARCHAR(7) DEFAULT '#339af0',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_user_subject (user_id, name)
 );
 
 -- 공부 기록 테이블

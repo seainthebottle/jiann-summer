@@ -1,4 +1,5 @@
 const API_URL = '/api';
+console.log('[API] URL base set to absolute:', API_URL);
 
 const api = {
     // 로컬 스토리지에 토큰 저장
@@ -23,7 +24,9 @@ const api = {
             ...options.headers
         };
 
-        const response = await fetch(`${API_URL}${path}`, {
+        const fullUrl = `${API_URL}${path}`;
+        console.log(`[API] Fetching: ${fullUrl}`);
+        const response = await fetch(fullUrl, {
             ...options,
             headers
         });

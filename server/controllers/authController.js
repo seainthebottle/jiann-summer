@@ -29,7 +29,15 @@ exports.login = async (req, res) => {
             return res.status(401).json({ error: '존재하지 않는 아이디입니다.' });
         }
 
-        const user = users[0];
+        let user = users[0];
+
+        // 패스워드 해시가 없는 경우 (초기 계정 등), 현재 입력한 비밀번호를 해시화하여 업데이트
+        if (!user.password_hash) {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            await db.query("UPDATE users SET password_hash = ? WHERE id = ?", [hashedPassword, user.id]);
+            user.password_hash = hashedPassword;
+        }
+
         const match = await bcrypt.compare(password, user.password_hash);
         if (!match) {
             return res.status(401).json({ error: '비밀번호가 일치하지 않습니다.' });

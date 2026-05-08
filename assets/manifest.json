@@ -1,8 +1,8 @@
 {
-  "name": "StudyTimer",
-  "short_name": "StudyTimer",
-  "description": "Premium Study Time Manager",
-  "start_url": "/",
+  "name": "PPakongTimer",
+  "short_name": "PPakongTimer",
+  "description": "Study Time Manager",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",

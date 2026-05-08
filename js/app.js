@@ -1,9 +1,13 @@
 const appState = {
     user: null,
     currentPage: 'auth',
-    version: 'v4',
+    version: 'v11',
+    initialized: false,
 
     async init() {
+        if (this.initialized) return;
+        this.initialized = true;
+        
         console.log(`App Initialized - Version: ${this.version}`);
         this.bindEvents();
         this.initTheme();
@@ -45,14 +49,36 @@ const appState = {
             });
         });
 
-        // 로그아웃
-        document.getElementById('logout-btn').addEventListener('click', () => {
-            if (confirm('정말 로그아웃 하시겠습니까?')) {
+        // 로그아웃 모달 제어
+        const logoutBtn = document.getElementById('logout-btn');
+        const logoutModal = document.getElementById('logout-modal');
+        const confirmBtn = document.getElementById('modal-confirm-btn');
+        const cancelBtn = document.getElementById('modal-cancel-btn');
+
+        if (logoutBtn && logoutModal) {
+            logoutBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                logoutModal.classList.add('active');
+            };
+
+            cancelBtn.onclick = () => {
+                logoutModal.classList.remove('active');
+            };
+
+            confirmBtn.onclick = () => {
                 api.removeToken();
                 this.user = null;
                 location.reload();
-            }
-        });
+            };
+
+            // 모달 바깥 클릭 시 닫기
+            logoutModal.onclick = (e) => {
+                if (e.target === logoutModal) {
+                    logoutModal.classList.remove('active');
+                }
+            };
+        }
 
 
 
@@ -234,22 +260,29 @@ const appState = {
     startStatsUpdateTimer() {
         this.stopStatsUpdateTimer();
         
-        const now = new Date();
-        // 다음 0초까지의 지연 시간 계산 (ms)
-        const delay = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
-        
-        this.statsUpdateTimer = setTimeout(() => {
+        // 1초마다 UI 업데이트 (현재 공부 중인 경우 시간 누적 표시)
+        this.statsUpdateTimer = setInterval(() => {
+            if (this.currentPage === 'stats') {
+                this.updateStatsUI();
+            }
+        }, 1000);
+
+        // 1분마다 서버 데이터 새로고침 (정기 동기화)
+        this.statsSyncTimer = setInterval(() => {
             if (this.currentPage === 'stats') {
                 this.loadStats();
-                this.startStatsUpdateTimer(); // 다음 1분 뒤 재실행
             }
-        }, delay);
+        }, 60000);
     },
 
     stopStatsUpdateTimer() {
         if (this.statsUpdateTimer) {
-            clearTimeout(this.statsUpdateTimer);
+            clearInterval(this.statsUpdateTimer);
             this.statsUpdateTimer = null;
+        }
+        if (this.statsSyncTimer) {
+            clearInterval(this.statsSyncTimer);
+            this.statsSyncTimer = null;
         }
     },
 
@@ -313,27 +346,40 @@ const appState = {
         
         const stats = await api.getStats(userId, startDate, endDate, subjectId);
 
-        
-        // 시간 포맷 헬퍼 (초 -> 시분초)
-        const format = (sec) => {
-            const h = Math.floor(sec / 3600);
-            const m = Math.floor((sec % 3600) / 60);
-            return `${h}시간 ${m}분`;
-        };
+        // 실시간 업데이트를 위해 데이터 저장
+        this.lastStats = stats;
+        this.lastStatsTimestamp = Date.now();
+        this.lastStatsDate = localDate;
 
-        document.getElementById('stat-daily').textContent = format(stats.dailyTotal);
-        document.getElementById('stat-weekly').textContent = format(stats.weeklyTotal);
-        document.getElementById('stat-monthly').textContent = format(stats.monthlyTotal);
-        document.getElementById('stat-weekly-avg').textContent = format(stats.weeklyAvg);
-        document.getElementById('stat-monthly-avg').textContent = format(stats.monthlyAvg);
+        this.updateStatsUI();
 
         window.charts.renderDailyPie(stats.sessions, localDate);
 
-        // 과목별 범례 생성
-        this.renderSubjectLegend(stats.sessions);
-
         // 날짜 네비게이션 버튼 상태 업데이트
         this.updateDateNavButtons();
+    },
+
+    updateStatsUI() {
+        if (!this.lastStats) return;
+
+        const stats = this.lastStats;
+        const now = Date.now();
+        const elapsed = (now - this.lastStatsTimestamp) / 1000;
+
+        // 오늘 날짜를 보고 있고, 진행 중인 세션이 있는 경우에만 실시간 가산
+        const isToday = this.lastStatsDate === this.getTodayDate();
+        const activeSession = stats.sessions.find(s => s.is_active);
+        const diff = (isToday && activeSession) ? elapsed : 0;
+
+        // 시간 요약 업데이트
+        document.getElementById('stat-daily').textContent = this.formatSeconds(Number(stats.dailyTotal) + diff);
+        document.getElementById('stat-weekly').textContent = this.formatSeconds(Number(stats.weeklyTotal) + diff);
+        document.getElementById('stat-monthly').textContent = this.formatSeconds(Number(stats.monthlyTotal) + diff);
+        document.getElementById('stat-weekly-avg').textContent = this.formatSeconds((Number(stats.weeklyTotal) + diff) / 7);
+        document.getElementById('stat-monthly-avg').textContent = this.formatSeconds((Number(stats.monthlyTotal) + diff) / 30);
+
+        // 과목별 범례 생성/업데이트
+        this.renderSubjectLegend(stats.sessions, diff);
     },
 
     changeStatsDate(days) {
@@ -373,7 +419,7 @@ const appState = {
         nextBtn.disabled = (selectedDate >= today);
     },
 
-    renderSubjectLegend(sessions) {
+    renderSubjectLegend(sessions, activeDiff = 0) {
         const legendContainer = document.getElementById('subject-stats-legend');
         if (!legendContainer) return;
         legendContainer.innerHTML = '';
@@ -389,11 +435,13 @@ const appState = {
             if (!summary[s.subject_name]) {
                 summary[s.subject_name] = {
                     time: 0,
-                    color: s.color
+                    color: s.color,
+                    is_active: false
                 };
             }
             const duration = (new Date(s.end) - new Date(s.start)) / 1000;
             summary[s.subject_name].time += duration;
+            if (s.is_active) summary[s.subject_name].is_active = true;
         });
 
         Object.entries(summary).forEach(([name, data]) => {
@@ -407,12 +455,14 @@ const appState = {
             item.style.borderRadius = '6px';
             item.style.background = 'rgba(0,0,0,0.02)';
 
+            const displayTime = data.is_active ? data.time + activeDiff : data.time;
+
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${data.color};"></div>
-                    <span style="font-weight: 500; font-size: 0.95rem;">${name}</span>
+                    <span style="font-weight: 500; font-size: 0.95rem;">${name}${data.is_active ? ' (공부 중)' : ''}</span>
                 </div>
-                <span style="font-weight: 600; color: var(--primary-color);">${this.formatSeconds(data.time)}</span>
+                <span style="font-weight: 600; color: var(--primary-color);">${this.formatSeconds(displayTime)}</span>
             `;
             legendContainer.appendChild(item);
         });
@@ -685,7 +735,7 @@ const appState = {
     registerServiceWorker() {
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
+                navigator.serviceWorker.register('sw.js')
                     .then(registration => {
                         console.log('SW registered: ', registration);
 
@@ -719,14 +769,9 @@ const appState = {
                     });
             });
 
-            // 서비스 워커가 업데이트되어 제어권이 변경되었을 때 페이지 새로고침
-            let refreshing = false;
+            // 서비스 워커가 업데이트되었을 때 콘솔에만 알림 (무한 루프 방지)
             navigator.serviceWorker.addEventListener('controllerchange', () => {
-                if (!refreshing) {
-                    refreshing = true;
-                    console.log('Controller changed, reloading page...');
-                    window.location.reload();
-                }
+                console.log('[SW] Controller changed. New version available.');
             });
         }
     }

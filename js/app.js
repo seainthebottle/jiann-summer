@@ -387,22 +387,31 @@ const appState = {
             const day = String(targetDate.getDate()).padStart(2, '0');
             const targetDateStr = `${year}-${month}-${day}`;
             const isFuture = targetDateStr > todayStr;
+            const isToday = targetDateStr === todayStr;
+
+            // 날짜 숫자 스타일: 오늘이면 굵게, 요일별 색 유지
+            const dateFontWeight = isToday ? '700' : '400';
+            const dateColor = idx === 0
+                ? (isToday ? '#ffa8a8' : '#fa5252')
+                : idx === 6
+                ? (isToday ? '#a5d8ff' : '#4dabf7')
+                : isToday ? 'var(--text-color)' : 'var(--text-secondary)';
 
             const box = document.createElement('div');
             box.style.cssText = `
                 width: 32px; height: 32px;
                 display: flex; align-items: center; justify-content: center;
                 border-radius: 6px;
-                font-size: 0.82rem; font-weight: ${isSelected ? '700' : '400'};
-                background: ${isSelected ? (idx === 0 ? '#e03131' : idx === 6 ? '#1971c2' : 'var(--primary-color)') : 'rgba(0,0,0,0.04)'};
-                color: ${isSelected ? '#fff' : (idx === 0 ? '#e03131' : idx === 6 ? '#1971c2' : 'var(--text-secondary)')};
+                font-size: 0.82rem; font-weight: 400;
+                background: ${isSelected ? (idx === 0 ? '#fa5252' : idx === 6 ? '#4dabf7' : 'var(--primary-color)') : 'rgba(0,0,0,0.04)'};
+                color: ${isSelected ? '#fff' : (idx === 0 ? '#fa5252' : idx === 6 ? '#4dabf7' : 'var(--text-secondary)')};
                 border: 1px solid ${isSelected ? 'transparent' : 'var(--border-color, #dee2e6)'};
                 opacity: ${isFuture ? '0.3' : '1'};
                 cursor: ${isFuture ? 'default' : 'pointer'};
                 transition: background 0.2s, opacity 0.2s;
             `;
             box.innerHTML = `
-                <div style="position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 0.62rem; color: var(--text-secondary); white-space: nowrap;">${targetDate.getDate()}</div>
+                <div style="position: absolute; top: -13px; left: 50%; transform: translate(-50%, -50%); width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: ${dateFontWeight}; color: ${dateColor};">${targetDate.getDate()}</div>
                 ${label}
             `;
             box.style.position = 'relative';

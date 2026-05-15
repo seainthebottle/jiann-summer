@@ -352,11 +352,73 @@ const appState = {
         this.lastStatsDate = localDate;
 
         this.updateStatsUI();
+        this.renderWeekdayIndicator(localDate);
 
         window.charts.renderDailyPie(stats.sessions, localDate);
 
         // 날짜 네비게이션 버튼 상태 업데이트
         this.updateDateNavButtons();
+    },
+
+    renderWeekdayIndicator(localDateStr) {
+        const container = document.getElementById('weekday-indicator');
+        if (!container) return;
+
+        // 로컬 날짜 문자열을 로컬 시간 기준으로 파싱하여 요일 계산
+        const date = new Date(`${localDateStr}T00:00:00`);
+        const selectedDay = date.getDay(); // 0=일, 1=월, ..., 6=토
+        const labels = ['일', '월', '화', '수', '목', '금', '토'];
+
+        container.innerHTML = '';
+        // 선택일 기준으로 해당 주 일요일의 날짜 계산
+        const weekSunday = new Date(`${localDateStr}T00:00:00`);
+        weekSunday.setDate(weekSunday.getDate() - selectedDay);
+
+        const todayStr = this.getTodayDate();
+
+        labels.forEach((label, idx) => {
+            const isSelected = idx === selectedDay;
+
+            // 이 요일 박스가 가리키는 실제 날짜
+            const targetDate = new Date(weekSunday);
+            targetDate.setDate(weekSunday.getDate() + idx);
+            const year = targetDate.getFullYear();
+            const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+            const day = String(targetDate.getDate()).padStart(2, '0');
+            const targetDateStr = `${year}-${month}-${day}`;
+            const isFuture = targetDateStr > todayStr;
+
+            const box = document.createElement('div');
+            box.style.cssText = `
+                width: 32px; height: 32px;
+                display: flex; align-items: center; justify-content: center;
+                border-radius: 6px;
+                font-size: 0.82rem; font-weight: ${isSelected ? '700' : '400'};
+                background: ${isSelected ? (idx === 0 ? '#e03131' : idx === 6 ? '#1971c2' : 'var(--primary-color)') : 'rgba(0,0,0,0.04)'};
+                color: ${isSelected ? '#fff' : (idx === 0 ? '#e03131' : idx === 6 ? '#1971c2' : 'var(--text-secondary)')};
+                border: 1px solid ${isSelected ? 'transparent' : 'var(--border-color, #dee2e6)'};
+                opacity: ${isFuture ? '0.3' : '1'};
+                cursor: ${isFuture ? 'default' : 'pointer'};
+                transition: background 0.2s, opacity 0.2s;
+            `;
+            box.innerHTML = `
+                <div style="position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 0.62rem; color: var(--text-secondary); white-space: nowrap;">${targetDate.getDate()}</div>
+                ${label}
+            `;
+            box.style.position = 'relative';
+
+            if (!isFuture && !isSelected) {
+                box.addEventListener('click', () => {
+                    const dateInput = document.getElementById('stats-date-select');
+                    dateInput.value = targetDateStr;
+                    localStorage.setItem('saved_stats_date', targetDateStr);
+                    localStorage.setItem('last_stats_date_change', Date.now());
+                    this.loadStats();
+                });
+            }
+
+            container.appendChild(box);
+        });
     },
 
     updateStatsUI() {
@@ -379,7 +441,7 @@ const appState = {
         document.getElementById('stat-monthly-avg').textContent = this.formatSeconds((Number(stats.monthlyTotal) + diff) / 30);
 
         // 과목별 범례 생성/업데이트
-        this.renderSubjectLegend(stats.sessions, diff);
+        this.renderSubjectLegend(stats.sessions, diff, stats.subjectWeeklyAvgs || {}, stats.subjectMonthlyAvgs || {});
     },
 
     changeStatsDate(days) {
@@ -419,7 +481,7 @@ const appState = {
         nextBtn.disabled = (selectedDate >= today);
     },
 
-    renderSubjectLegend(sessions, activeDiff = 0) {
+    renderSubjectLegend(sessions, activeDiff = 0, subjectWeeklyAvgs = {}, subjectMonthlyAvgs = {}) {
         const legendContainer = document.getElementById('subject-stats-legend');
         if (!legendContainer) return;
         legendContainer.innerHTML = '';
@@ -444,25 +506,46 @@ const appState = {
             if (s.is_active) summary[s.subject_name].is_active = true;
         });
 
-        Object.entries(summary).forEach(([name, data]) => {
+        // 당일 sessions + 주간/월간 평균에 있는 과목을 모두 합산하여 표시
+        const allNames = new Set([
+            ...Object.keys(summary),
+            ...Object.keys(subjectWeeklyAvgs),
+            ...Object.keys(subjectMonthlyAvgs)
+        ]);
+
+        allNames.forEach(name => {
+            const data = summary[name];
+            const weeklyData = subjectWeeklyAvgs[name];
+            const monthlyData = subjectMonthlyAvgs[name];
+
+            // 색상: 당일 세션 > 주간 데이터 > 월간 데이터 > 기본값
+            const color = (data && data.color) || (weeklyData && weeklyData.color) || (monthlyData && monthlyData.color) || '#339af0';
+            const isActive = data ? data.is_active : false;
+            const dailyTime = data ? data.time : 0;
+            const displayTime = isActive ? dailyTime + activeDiff : dailyTime;
+
+            const weeklyAvg = (weeklyData ? weeklyData.avg : 0) + (isActive ? activeDiff / 7 : 0);
+            const monthlyAvg = (monthlyData ? monthlyData.avg : 0) + (isActive ? activeDiff / 30 : 0);
+
             const item = document.createElement('div');
             item.className = 'legend-item';
-            item.style.display = 'flex';
-            item.style.alignItems = 'center';
-            item.style.justifyContent = 'space-between';
             item.style.marginBottom = '10px';
-            item.style.padding = '8px';
+            item.style.padding = '8px 10px';
             item.style.borderRadius = '6px';
             item.style.background = 'rgba(0,0,0,0.02)';
 
-            const displayTime = data.is_active ? data.time + activeDiff : data.time;
-
             item.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${data.color};"></div>
-                    <span style="font-weight: 500; font-size: 0.95rem;">${name}${data.is_active ? ' (공부 중)' : ''}</span>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${color}; flex-shrink: 0;"></div>
+                        <span style="font-weight: 500; font-size: 0.95rem;">${name}${isActive ? ' (공부 중)' : ''}</span>
+                    </div>
+                    <span style="font-weight: 600; color: ${displayTime > 0 ? 'var(--primary-color)' : 'var(--text-secondary)'};">${this.formatSeconds(displayTime)}</span>
                 </div>
-                <span style="font-weight: 600; color: var(--primary-color);">${this.formatSeconds(displayTime)}</span>
+                <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-left: 22px; font-size: 0.78rem; color: var(--text-secondary);">
+                    <span>주간 일평균: <strong>${this.formatSeconds(weeklyAvg)}</strong></span>
+                    <span>월간 일평균: <strong>${this.formatSeconds(monthlyAvg)}</strong></span>
+                </div>
             `;
             legendContainer.appendChild(item);
         });

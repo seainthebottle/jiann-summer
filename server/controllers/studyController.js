@@ -299,6 +299,53 @@ exports.getStats = async (req, res) => {
         }
         const monthlyTotalResult = await db.query(monthlyQuery, monthlyParams);
 
+        // 과목별 주간 합계 (GROUP BY subject) — 색상 포함
+        let subjectWeeklyQuery = `
+            SELECT sub.name as subject_name, sub.color,
+                   COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', weeklyStartUTC, weeklyEndUTC)}), 0) as total
+            FROM study_sessions s
+            LEFT JOIN subjects sub ON s.subject_id = sub.id
+            WHERE s.user_id = ?
+              AND s.start_time <= ?
+              AND IFNULL(s.end_time, UTC_TIMESTAMP()) >= ?
+        `;
+        let subjectWeeklyParams = [user_id, sqlWeeklyEnd, sqlWeeklyStart];
+        if (subjectId && subjectId !== 'null' && subjectId !== '') {
+            subjectWeeklyQuery += " AND s.subject_id = ?";
+            subjectWeeklyParams.push(subjectId);
+        }
+        subjectWeeklyQuery += " GROUP BY s.subject_id, sub.name, sub.color";
+
+        // 과목별 월간 합계 (GROUP BY subject) — 색상 포함
+        let subjectMonthlyQuery = `
+            SELECT sub.name as subject_name, sub.color,
+                   COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', monthlyStartUTC, monthlyEndUTC)}), 0) as total
+            FROM study_sessions s
+            LEFT JOIN subjects sub ON s.subject_id = sub.id
+            WHERE s.user_id = ?
+              AND s.start_time <= ?
+              AND IFNULL(s.end_time, UTC_TIMESTAMP()) >= ?
+        `;
+        let subjectMonthlyParams = [user_id, sqlMonthlyEnd, sqlMonthlyStart];
+        if (subjectId && subjectId !== 'null' && subjectId !== '') {
+            subjectMonthlyQuery += " AND s.subject_id = ?";
+            subjectMonthlyParams.push(subjectId);
+        }
+        subjectMonthlyQuery += " GROUP BY s.subject_id, sub.name, sub.color";
+
+        const subjectWeeklyResult = await db.query(subjectWeeklyQuery, subjectWeeklyParams);
+        const subjectMonthlyResult = await db.query(subjectMonthlyQuery, subjectMonthlyParams);
+
+        // subject_name 키로 { avg, color } 객체 생성
+        const subjectWeeklyAvgs = {};
+        subjectWeeklyResult.forEach(row => {
+            subjectWeeklyAvgs[row.subject_name] = { avg: Number(row.total) / 7, color: row.color };
+        });
+        const subjectMonthlyAvgs = {};
+        subjectMonthlyResult.forEach(row => {
+            subjectMonthlyAvgs[row.subject_name] = { avg: Number(row.total) / 30, color: row.color };
+        });
+
         // 3. 전체 누적 합계 (모든 시간)
         let totalQuery = `
             SELECT COALESCE(SUM(IFNULL(s.duration_seconds, TIMESTAMPDIFF(SECOND, s.start_time, UTC_TIMESTAMP()))), 0) as total 
@@ -321,6 +368,8 @@ exports.getStats = async (req, res) => {
             monthlyTotal: monthlyTotalResult[0].total,
             weeklyAvg: weeklyTotalResult[0].total / 7,
             monthlyAvg: monthlyTotalResult[0].total / 30,
+            subjectWeeklyAvgs,
+            subjectMonthlyAvgs,
             cumulativeTotal: totalTotalResult[0].total,
             debug: {
                 range: { start: rangeStart, end: rangeEnd },

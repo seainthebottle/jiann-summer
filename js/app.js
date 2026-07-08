@@ -155,7 +155,54 @@ const appState = {
             this.updateHomeSubjectTime();
             this.updateStudyButtonState();
         });
+
+        // 계획 예상 시간 슬라이더 - 숫자 입력 동기화
+        const planSlider = document.getElementById('plan-time-slider');
+        const planNumber = document.getElementById('plan-time-number');
+        if (planSlider && planNumber) {
+            planSlider.addEventListener('input', () => {
+                planNumber.value = planSlider.value;
+            });
+            planNumber.addEventListener('input', () => {
+                let val = parseInt(planNumber.value) || 10;
+                if (val < 10) val = 10;
+                if (val > 60) val = 60;
+                planSlider.value = val;
+            });
+            planNumber.addEventListener('change', () => {
+                let val = parseInt(planNumber.value) || 10;
+                if (val < 10) val = 10;
+                if (val > 60) val = 60;
+                planNumber.value = val;
+                planSlider.value = val;
+            });
+        }
+
+        // 계획 추가 폼 서브밋
+        const addPlanForm = document.getElementById('add-plan-form');
+        if (addPlanForm) {
+            addPlanForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const subjectId = homeSubjectSelect.value;
+                const title = document.getElementById('plan-title').value;
+                const estimatedMinutes = parseInt(planNumber.value) || 30;
+
+                if (!subjectId) {
+                    alert('과목을 먼저 선택해주세요.');
+                    return;
+                }
+
+                try {
+                    await api.createPlan(subjectId, title, estimatedMinutes);
+                    document.getElementById('plan-title').value = '';
+                    this.loadPlans();
+                } catch (err) {
+                    alert(err.message);
+                }
+            });
+        }
     },
+
 
     onLoginSuccess() {
         document.getElementById('navbar').classList.remove('hidden');
@@ -169,6 +216,7 @@ const appState = {
         
         this.showPage(targetPage);
         this.loadSubjects();
+        this.loadPlans(); // 계획 목록 로드 추가
         this.checkActiveSession();
         
         window.timer.init();
@@ -304,11 +352,12 @@ const appState = {
             // 셀렉트 박스에서 해당 과목 선택 상태로 변경
             document.getElementById('subject-select').value = active.subject_id;
             await this.updateHomeSubjectTime(); // 비동기 대기 추가
-            window.timer.start(active.start_time);
+            window.timer.start(active.start_time, active.plan_id); // plan_id 연동 추가
         } else {
             await this.updateHomeSubjectTime();
         }
     },
+
 
     async loadStats() {
         // 관리자가 명시적으로 사용자를 선택하지 않았을 경우, 현재 드롭다운의 값을 사용하거나 기본값(본인) 사용
@@ -560,9 +609,9 @@ const appState = {
             const startUTC = new Date(`${todayLocal}T00:00:00`).toISOString();
             const endUTC = new Date(`${todayLocal}T23:59:59.999`).toISOString();
 
-            const totalStats = await api.getStats(null, startUTC, endUTC, null);
+        const todayStats = await api.getStats(null, startUTC, endUTC, null);
 
-            let totalTime = Number(totalStats.dailyTotal) || 0;
+            let totalTime = Number(todayStats.dailyTotal) || 0;
             
             // 현재 공부 중인 경우, 서버에서 받아온 '오늘 총합'에는 이미 현재 세션의 시간이 포함되어 있음.
             // timer.js에서 totalTime + diff를 수행하므로, 중복 방지를 위해 diff를 빼서 순수 '이전 세션들의 합'을 구함.
@@ -597,11 +646,10 @@ const appState = {
         }
     },
 
-
-
     updateStudyButtonState() {
         const select = document.getElementById('subject-select');
         const btn = document.getElementById('study-toggle-btn');
+        const planBtn = document.getElementById('add-plan-btn');
         
         // 공부 중일 때는 상태를 변경하지 않음 (timer.js에서 관리)
         if (btn.classList.contains('btn-stop')) return;
@@ -612,9 +660,167 @@ const appState = {
         if (subjectId) {
             btn.disabled = false;
             btn.textContent = `${subjectName} 공부 시작`;
+            if (planBtn) {
+                planBtn.disabled = false;
+                planBtn.textContent = `"${subjectName}" 과목으로 계획 추가`;
+            }
         } else {
             btn.disabled = true;
             btn.textContent = '과목을 선택하세요';
+            if (planBtn) {
+                planBtn.disabled = true;
+                planBtn.textContent = '과목을 선택해주세요';
+            }
+        }
+    },
+
+    // 계획 목록 로드 및 렌더링
+    async loadPlans() {
+        const plansList = document.getElementById('plans-list');
+        const emptyMsg = document.getElementById('plans-empty-msg');
+        if (!plansList) return;
+
+        try {
+            const plans = await api.getPlans();
+            plansList.innerHTML = '';
+
+            if (!plans || plans.length === 0) {
+                if (emptyMsg) emptyMsg.classList.remove('hidden');
+                return;
+            }
+
+            if (emptyMsg) emptyMsg.classList.add('hidden');
+
+            const currentActivePlanId = window.timer ? window.timer.activePlanId : null;
+            const isRunning = window.timer ? window.timer.isRunning() : false;
+
+            plans.forEach(plan => {
+                const li = document.createElement('li');
+                const isRunningThis = isRunning && currentActivePlanId === plan.id;
+                
+                li.className = `plan-card status-${plan.status}${isRunningThis ? ' running' : ''}`;
+                li.id = `plan-card-${plan.id}`;
+                li.dataset.completedSeconds = plan.completed_seconds;
+                li.dataset.estimatedMinutes = plan.estimated_minutes;
+                li.style.borderLeft = `6px solid ${plan.subject_color || '#339af0'}`;
+
+                // 진행 상황 계산 (초과 진행률 목표 마커 위치 계산 포함)
+                const estSec = plan.estimated_minutes * 60;
+                const curSec = plan.completed_seconds;
+                const maxSec = Math.max(estSec, curSec);
+                
+                const progressPercent = (curSec / maxSec) * 100;
+                const targetPercent = (estSec / maxSec) * 100;
+
+                // 버튼 구성
+                let actionButtons = '';
+                if (isRunningThis) {
+                    actionButtons = `<button class="btn-plan-action btn-plan-stop" onclick="appState.stopPlan()">정지</button>`;
+                } else {
+                    if (plan.status === 'done') {
+                        actionButtons = `<span style="font-size: 0.8rem; font-weight: 700; color: var(--success-color); padding: 6px 0;">완료됨</span>`;
+                    } else {
+                        actionButtons = `
+                            <button class="btn-plan-action btn-plan-start" onclick="appState.startPlan(${plan.id}, ${plan.subject_id})">시작</button>
+                            <button class="btn-plan-action btn-plan-done" onclick="appState.donePlan(${plan.id})">완료</button>
+                        `;
+                    }
+                }
+
+                li.innerHTML = `
+                    <div class="plan-card-header">
+                        <div class="plan-title-wrapper">
+                            <span class="plan-subject-badge" style="background-color: ${plan.subject_color || '#339af0'}">${plan.subject_name}</span>
+                            <div class="plan-title">${plan.title}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="plan-progress-container">
+                        <div class="plan-progress-bar" style="width: ${progressPercent}%; background-color: ${plan.subject_color || '#339af0'}"></div>
+                        <div class="plan-target-marker" style="left: ${targetPercent}%"></div>
+                    </div>
+                    
+                    <div class="plan-time-info">
+                        <div>진행: <span class="time-current">${this.formatMinutesSeconds(curSec)}</span></div>
+                        <div>목표: <span>${plan.estimated_minutes}분</span></div>
+                    </div>
+                    
+                    <div class="plan-actions">
+                        ${actionButtons}
+                        <button class="btn-plan-action btn-plan-delete" onclick="appState.deletePlan(${plan.id})">삭제</button>
+                    </div>
+                `;
+                plansList.appendChild(li);
+            });
+        } catch (err) {
+            console.error('계획 로드 실패:', err);
+        }
+    },
+
+    // 초를 분:초 문자열로 포맷팅
+    formatMinutesSeconds(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}분 ${s}초`;
+    },
+
+    // 계획 시작
+    async startPlan(planId, subjectId) {
+        if (window.timer && window.timer.isRunning()) {
+            if (window.timer.activePlanId === planId) return;
+            if (!confirm('현재 진행 중인 공부 세션을 종료하고 이 계획을 시작하시겠습니까?')) {
+                return;
+            }
+            try {
+                await api.stopSession();
+                window.timer.stop();
+            } catch (err) {
+                alert('진행 중인 세션 종료 실패: ' + err.message);
+                return;
+            }
+        }
+
+        try {
+            await api.startSession(subjectId, planId);
+            document.getElementById('subject-select').value = subjectId;
+            await this.updateHomeSubjectTime();
+            window.timer.start(new Date(), planId);
+            await this.loadPlans();
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    // 계획 정지
+    async stopPlan() {
+        try {
+            await api.stopSession();
+            if (window.timer) window.timer.stop();
+            await this.loadPlans();
+            await this.loadStats();
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    // 계획 완료 처리
+    async donePlan(planId) {
+        try {
+            await api.donePlan(planId);
+            await this.loadPlans();
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    // 계획 삭제
+    async deletePlan(planId) {
+        if (!confirm('이 계획을 삭제하시겠습니까?')) return;
+        try {
+            await api.deletePlan(planId);
+            await this.loadPlans();
+        } catch (err) {
+            alert(err.message);
         }
     },
 

@@ -27,8 +27,22 @@ CREATE TABLE IF NOT EXISTS study_sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     subject_id INT NOT NULL,
+    plan_id INT DEFAULT NULL,
     start_time DATETIME NOT NULL,
     end_time DATETIME,
     duration_seconds INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 공부 계획 테이블
+CREATE TABLE IF NOT EXISTS plans (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    subject_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    estimated_minutes INT NOT NULL,
+    completed_seconds INT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'todo',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+

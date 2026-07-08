@@ -11,4 +11,11 @@ router.get('/status', studyController.getStatus);
 router.get('/stats', studyController.getStats);
 router.get('/subjects', studyController.getSubjects);
 
+// 계획 관련 API
+router.get('/plans', studyController.getPlans);
+router.post('/plans', studyController.createPlan);
+router.post('/plans/:id/done', studyController.donePlan);
+router.delete('/plans/:id', studyController.deletePlan);
+
 module.exports = router;
+

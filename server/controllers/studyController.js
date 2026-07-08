@@ -34,7 +34,7 @@ const isoToSQLDateTime = (isoStr) => {
 
 // 공부 시작
 exports.startSession = async (req, res) => {
-    const { subject_id } = req.body;
+    const { subject_id, plan_id } = req.body;
     const user_id = req.user.id;
     try {
         // 이미 진행 중인 세션이 있는지 확인
@@ -47,16 +47,24 @@ exports.startSession = async (req, res) => {
         }
 
         await db.query(
-            "INSERT INTO study_sessions (user_id, subject_id, start_time) VALUES (?, ?, UTC_TIMESTAMP())",
-            [user_id, subject_id]
+            "INSERT INTO study_sessions (user_id, subject_id, plan_id, start_time) VALUES (?, ?, ?, UTC_TIMESTAMP())",
+            [user_id, subject_id, plan_id || null]
         );
 
+        if (plan_id) {
+            await db.query(
+                "UPDATE plans SET status = 'in_progress' WHERE id = ? AND user_id = ?",
+                [plan_id, user_id]
+            );
+        }
 
         res.json({ message: '공부 시작!' });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: '서버 오류 발생' });
     }
 };
+
 
 // 공부 종료
 exports.stopSession = async (req, res) => {
@@ -76,11 +84,19 @@ exports.stopSession = async (req, res) => {
         const diffCheck = await db.query("SELECT TIMESTAMPDIFF(SECOND, start_time, UTC_TIMESTAMP()) as diff FROM study_sessions WHERE id = ?", [session.id]);
         const diffSeconds = diffCheck[0].diff;
 
-
-
         if (diffSeconds <= 60) {
             // 1분 이하인 경우 세션 삭제
             await db.query("DELETE FROM study_sessions WHERE id = ?", [session.id]);
+            
+            // 계획이 연결되어 있었다면 상태 복원 검토
+            if (session.plan_id) {
+                const planRes = await db.query("SELECT * FROM plans WHERE id = ?", [session.plan_id]);
+                if (planRes.length > 0) {
+                    const plan = planRes[0];
+                    const nextStatus = plan.completed_seconds >= plan.estimated_minutes * 60 ? 'done' : 'todo';
+                    await db.query("UPDATE plans SET status = ? WHERE id = ?", [nextStatus, session.plan_id]);
+                }
+            }
             return res.json({ message: '공부 시간이 1분 이하여서 기록되지 않았습니다.' });
         }
 
@@ -92,12 +108,32 @@ exports.stopSession = async (req, res) => {
             [diffSeconds, session.id]
         );
 
+        // 계획 연동 처리
+        if (session.plan_id) {
+            // 진행 시간 누적
+            await db.query(
+                `UPDATE plans 
+                 SET completed_seconds = completed_seconds + ? 
+                 WHERE id = ? AND user_id = ?`,
+                [diffSeconds, session.plan_id, user_id]
+            );
+
+            // 누적 시간이 예상 시간보다 크거나 같은지 확인하여 상태 업데이트
+            const planRes = await db.query("SELECT * FROM plans WHERE id = ?", [session.plan_id]);
+            if (planRes.length > 0) {
+                const plan = planRes[0];
+                const nextStatus = plan.completed_seconds >= plan.estimated_minutes * 60 ? 'done' : 'todo';
+                await db.query("UPDATE plans SET status = ? WHERE id = ?", [nextStatus, session.plan_id]);
+            }
+        }
 
         res.json({ message: '공부 종료!' });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: '서버 오류 발생' });
     }
 };
+
 
 // 현재 상태 조회 (진행 중인 세션 확인)
 exports.getStatus = async (req, res) => {
@@ -350,3 +386,77 @@ exports.getSubjects = async (req, res) => {
         res.status(500).json({ error: '과목 조회 중 오류 발생' });
     }
 };
+
+// 계획 목록 조회
+exports.getPlans = async (req, res) => {
+    const user_id = req.user.id;
+    try {
+        const plans = await db.query(
+            `SELECT p.*, s.name as subject_name, s.color as subject_color 
+             FROM plans p 
+             JOIN subjects s ON p.subject_id = s.id 
+             WHERE p.user_id = ? 
+             ORDER BY p.created_at DESC`,
+            [user_id]
+        );
+        res.json(plans);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: '계획 조회 중 오류 발생' });
+    }
+};
+
+// 계획 생성
+exports.createPlan = async (req, res) => {
+    const user_id = req.user.id;
+    const { subject_id, title, estimated_minutes } = req.body;
+    
+    if (!subject_id || !title || !estimated_minutes) {
+        return res.status(400).json({ error: '과목, 계획 내용, 예상 시간은 필수입니다.' });
+    }
+    
+    try {
+        await db.query(
+            `INSERT INTO plans (user_id, subject_id, title, estimated_minutes, completed_seconds, status) 
+             VALUES (?, ?, ?, ?, 0, 'todo')`,
+            [user_id, subject_id, title, estimated_minutes]
+        );
+        res.json({ message: '계획이 생성되었습니다.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: '계획 생성 중 오류 발생' });
+    }
+};
+
+// 계획 완료 처리
+exports.donePlan = async (req, res) => {
+    const user_id = req.user.id;
+    const { id } = req.params;
+    try {
+        await db.query(
+            `UPDATE plans SET status = 'done' WHERE id = ? AND user_id = ?`,
+            [id, user_id]
+        );
+        res.json({ message: '계획이 완료 처리되었습니다.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: '계획 완료 처리 중 오류 발생' });
+    }
+};
+
+// 계획 삭제
+exports.deletePlan = async (req, res) => {
+    const user_id = req.user.id;
+    const { id } = req.params;
+    try {
+        await db.query(
+            `DELETE FROM plans WHERE id = ? AND user_id = ?`,
+            [id, user_id]
+        );
+        res.json({ message: '계획이 삭제되었습니다.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: '계획 삭제 중 오류 발생' });
+    }
+};
+

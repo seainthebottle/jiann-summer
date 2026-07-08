@@ -38,10 +38,16 @@ const timer = {
         }
     },
 
-    start(time) {
+    start(time, planId = null) {
         startTime = new Date(time);
+        this.activePlanId = planId;
         const subjectName = this.subjectSelect.options[this.subjectSelect.selectedIndex]?.text || '';
-        this.toggleBtn.textContent = `${subjectName} 공부 종료`;
+        
+        if (this.activePlanId) {
+            this.toggleBtn.textContent = `계획 공부 종료`;
+        } else {
+            this.toggleBtn.textContent = `${subjectName} 공부 종료`;
+        }
         this.toggleBtn.classList.replace('btn-start', 'btn-stop');
         this.subjectSelect.disabled = true;
 
@@ -52,6 +58,7 @@ const timer = {
 
     stop() {
         clearInterval(timerInterval);
+        this.activePlanId = null;
         this.toggleBtn.classList.replace('btn-stop', 'btn-start');
         this.subjectSelect.disabled = false;
         this.display.textContent = '00:00:00';
@@ -71,6 +78,13 @@ const timer = {
         return Math.floor((now - startTime) / 1000);
     },
 
+    // 초를 분:초 형식으로 포맷팅 (계획용 헬퍼)
+    formatMinutesSeconds(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}분 ${s}초`;
+    },
+
     updateDisplay() {
         const diff = this.getCurrentDiff();
         
@@ -79,6 +93,37 @@ const timer = {
         const seconds = String(diff % 60).padStart(2, '0');
         
         this.display.textContent = `${hours}:${minutes}:${seconds}`;
+
+        // 3. 실시간으로 현재 진행 중인 계획 카드 갱신
+        if (this.activePlanId) {
+            const card = document.getElementById(`plan-card-${this.activePlanId}`);
+            if (card) {
+                const baseCompleted = parseInt(card.dataset.completedSeconds) || 0;
+                const estimated = (parseInt(card.dataset.estimatedMinutes) || 0) * 60;
+                const totalCompleted = baseCompleted + diff;
+
+                // 시간 텍스트 업데이트
+                const timeText = card.querySelector('.time-current');
+                if (timeText) {
+                    timeText.textContent = this.formatMinutesSeconds(totalCompleted);
+                }
+
+                // 진행률 바 & 목표 마커 갱신 (사용자 피드백 수식 적용)
+                const maxTime = Math.max(estimated, totalCompleted);
+                const progressPercent = (totalCompleted / maxTime) * 100;
+                const targetPercent = (estimated / maxTime) * 100;
+
+                const progressBar = card.querySelector('.plan-progress-bar');
+                if (progressBar) {
+                    progressBar.style.width = `${progressPercent}%`;
+                }
+
+                const targetMarker = card.querySelector('.plan-target-marker');
+                if (targetMarker) {
+                    targetMarker.style.left = `${targetPercent}%`;
+                }
+            }
+        }
 
         if (!window.appState) return;
 
@@ -103,3 +148,4 @@ const timer = {
 };
 
 window.timer = timer;
+

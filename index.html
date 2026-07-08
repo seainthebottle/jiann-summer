@@ -114,7 +114,39 @@
                     <button id="study-toggle-btn" class="btn-start" disabled>과목을 선택하세요</button>
                 </div>
 
+                <!-- 공부 계획 섹션 -->
+                <div class="plans-section">
+                    <h3>오늘의 공부 계획</h3>
+                    
+                    <form id="add-plan-form" class="add-plan-form">
+                        <div class="form-group">
+                            <label for="plan-title">계획 내용</label>
+                            <input type="text" id="plan-title" placeholder="무엇을 공부할까요? (예: 영어 단어 50개 암기)" required>
+                        </div>
+                        <div class="plan-time-container">
+                            <div class="form-group plan-slider-group">
+                                <label for="plan-time-slider">예상 시간 (10분 단위)</label>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="plan-time-slider" min="10" max="60" step="10" value="30">
+                                </div>
+                            </div>
+                            <div class="form-group plan-number-group">
+                                <label for="plan-time-number">시간 (분)</label>
+                                <input type="number" id="plan-time-number" min="10" max="60" step="1" value="30">
+                            </div>
+                        </div>
+                        <button type="submit" id="add-plan-btn" class="btn-secondary" style="width: 100%;" disabled>과목을 선택해주세요</button>
+                    </form>
+
+                    <div id="plans-list-container" class="plans-list-container">
+                        <div id="plans-empty-msg" class="plans-empty-msg">등록된 계획이 없습니다.</div>
+                        <ul id="plans-list" class="plans-list">
+                            <!-- JS에서 계획 목록 동적 렌더링 -->
+                        </ul>
+                    </div>
+                </div>
             </section>
+
 
             <!-- 통계 섹션 -->
             <section id="stats-page" class="hidden">

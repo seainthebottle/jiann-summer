@@ -65,10 +65,10 @@ const api = {
         return await this.request('/study/subjects');
     },
 
-    async startSession(subjectId) {
+    async startSession(subjectId, planId = null) {
         return await this.request('/study/start', {
             method: 'POST',
-            body: JSON.stringify({ subject_id: subjectId })
+            body: JSON.stringify({ subject_id: subjectId, plan_id: planId })
         });
     },
 
@@ -81,6 +81,35 @@ const api = {
     async getStatus() {
         return await this.request('/study/status');
     },
+
+    // 계획 관련 API
+    async getPlans() {
+        return await this.request('/study/plans');
+    },
+
+    async createPlan(subjectId, title, estimatedMinutes) {
+        return await this.request('/study/plans', {
+            method: 'POST',
+            body: JSON.stringify({
+                subject_id: subjectId,
+                title,
+                estimated_minutes: estimatedMinutes
+            })
+        });
+    },
+
+    async donePlan(planId) {
+        return await this.request(`/study/plans/${planId}/done`, {
+            method: 'POST'
+        });
+    },
+
+    async deletePlan(planId) {
+        return await this.request(`/study/plans/${planId}`, {
+            method: 'DELETE'
+        });
+    },
+
 
     async getStats(userId, startDate, endDate, subjectId) {
         const params = new URLSearchParams();

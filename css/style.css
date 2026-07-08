@@ -485,3 +485,321 @@ select:focus {
 .btn-cancel:hover {
     filter: brightness(0.9);
 }
+
+/* 공부 계획 섹션 스타일 */
+.plans-section {
+    max-width: 500px;
+    margin: 40px auto 20px;
+    background-color: var(--card-bg);
+    padding: 24px;
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border-color);
+    text-align: left;
+    transition: var(--transition);
+}
+
+.plans-section h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    border-left: 4px solid var(--primary-color);
+    padding-left: 10px;
+}
+
+/* 계획 추가 폼 */
+.add-plan-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.plan-time-container {
+    display: flex;
+    gap: 15px;
+    align-items: flex-end;
+}
+
+.plan-slider-group {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.plan-number-group {
+    width: 90px;
+    margin-bottom: 0;
+}
+
+.slider-wrapper {
+    display: flex;
+    align-items: center;
+    height: 42px;
+}
+
+.add-plan-form input[type="range"] {
+    padding: 0;
+    height: 6px;
+    background: var(--border-color);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+    width: 100%;
+}
+
+.add-plan-form input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.add-plan-form input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.btn-secondary {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+}
+
+.btn-secondary:disabled {
+    background-color: var(--secondary-color);
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 계획 리스트 */
+.plans-list-container {
+    margin-top: 15px;
+}
+
+.plans-empty-msg {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    padding: 20px 0;
+}
+
+.plans-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* 계획 카드 */
+.plan-card {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    transition: var(--transition);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 완료된 계획은 불투명도를 낮추고 취소선 처리 */
+.plan-card.status-done {
+    opacity: 0.65;
+}
+
+.plan-card.status-done .plan-title {
+    text-decoration: line-through;
+    color: var(--text-secondary);
+}
+
+.plan-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.plan-subject-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    color: white;
+    display: inline-block;
+}
+
+.plan-title-wrapper {
+    flex: 1;
+}
+
+.plan-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-color);
+    word-break: break-all;
+    margin-top: 4px;
+}
+
+.plan-time-info {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2px;
+}
+
+.plan-time-info .time-current {
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+/* 진행 상황 막대 (Progress Bar) */
+.plan-progress-container {
+    height: 12px;
+    background-color: var(--border-color);
+    border-radius: 6px;
+    width: 100%;
+    position: relative;
+    overflow: visible; /* 마커가 삐져나갈 수 있으므로 보임 처리 */
+}
+
+.plan-progress-bar {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.1s linear; /* 부드러운 실시간 증가 */
+}
+
+/* 목표 지점 마커 */
+.plan-target-marker {
+    position: absolute;
+    top: -4px;
+    height: 20px;
+    width: 3px;
+    background-color: #f03e3e; /* 목표 표시 세로선 */
+    box-shadow: 0 0 4px rgba(240, 62, 62, 0.6);
+    z-index: 2;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+/* 목표 마커용 툴팁 텍스트 */
+.plan-target-marker::after {
+    content: "목표";
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #f03e3e;
+    white-space: nowrap;
+}
+
+/* 액션 버튼 그룹 */
+.plan-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-plan-action {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    border: none;
+    transition: var(--transition);
+}
+
+.btn-plan-start {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.btn-plan-stop {
+    background-color: var(--danger-color);
+    color: white;
+    animation: pulse 1.5s infinite;
+}
+
+.btn-plan-done {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.btn-plan-done:hover {
+    background-color: #868e96;
+}
+
+.btn-plan-delete {
+    background-color: transparent;
+    color: var(--danger-color);
+    border: 1px solid var(--danger-color);
+}
+
+.btn-plan-delete:hover {
+    background-color: rgba(255, 107, 107, 0.1);
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 8px rgba(255, 107, 107, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0);
+    }
+}
+
+/* 모바일 화면 최적화 미디어 쿼리 */
+@media (max-width: 540px) {
+    .plans-section {
+        margin: 20px 10px;
+        padding: 16px;
+        max-width: 100%;
+    }
+
+    .plan-time-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .plan-number-group {
+        width: 100%;
+    }
+
+    .plan-card {
+        padding: 12px;
+    }
+
+    .plan-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .btn-plan-action {
+        flex: 1;
+        text-align: center;
+        padding: 8px 6px;
+        font-size: 0.75rem;
+    }
+}

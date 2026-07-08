@@ -335,6 +335,53 @@ exports.getStats = async (req, res) => {
         }
         const monthlyTotalResult = await db.query(monthlyQuery, monthlyParams);
 
+        // 과목별 주간 합계 (GROUP BY subject) — 색상 포함
+        let subjectWeeklyQuery = `
+            SELECT sub.name as subject_name, sub.color,
+                   COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', weeklyStartUTC, weeklyEndUTC)}), 0) as total
+            FROM study_sessions s
+            LEFT JOIN subjects sub ON s.subject_id = sub.id
+            WHERE s.user_id = ?
+              AND s.start_time <= ?
+              AND IFNULL(s.end_time, UTC_TIMESTAMP()) >= ?
+        `;
+        let subjectWeeklyParams = [user_id, sqlWeeklyEnd, sqlWeeklyStart];
+        if (subjectId && subjectId !== 'null' && subjectId !== '') {
+            subjectWeeklyQuery += " AND s.subject_id = ?";
+            subjectWeeklyParams.push(subjectId);
+        }
+        subjectWeeklyQuery += " GROUP BY s.subject_id, sub.name, sub.color";
+
+        // 과목별 월간 합계 (GROUP BY subject) — 색상 포함
+        let subjectMonthlyQuery = `
+            SELECT sub.name as subject_name, sub.color,
+                   COALESCE(SUM(${getRangeDuration('s.start_time', 's.end_time', monthlyStartUTC, monthlyEndUTC)}), 0) as total
+            FROM study_sessions s
+            LEFT JOIN subjects sub ON s.subject_id = sub.id
+            WHERE s.user_id = ?
+              AND s.start_time <= ?
+              AND IFNULL(s.end_time, UTC_TIMESTAMP()) >= ?
+        `;
+        let subjectMonthlyParams = [user_id, sqlMonthlyEnd, sqlMonthlyStart];
+        if (subjectId && subjectId !== 'null' && subjectId !== '') {
+            subjectMonthlyQuery += " AND s.subject_id = ?";
+            subjectMonthlyParams.push(subjectId);
+        }
+        subjectMonthlyQuery += " GROUP BY s.subject_id, sub.name, sub.color";
+
+        const subjectWeeklyResult = await db.query(subjectWeeklyQuery, subjectWeeklyParams);
+        const subjectMonthlyResult = await db.query(subjectMonthlyQuery, subjectMonthlyParams);
+
+        // subject_name 키로 { avg, color } 객체 생성
+        const subjectWeeklyAvgs = {};
+        subjectWeeklyResult.forEach(row => {
+            subjectWeeklyAvgs[row.subject_name] = { avg: Number(row.total) / 7, color: row.color };
+        });
+        const subjectMonthlyAvgs = {};
+        subjectMonthlyResult.forEach(row => {
+            subjectMonthlyAvgs[row.subject_name] = { avg: Number(row.total) / 30, color: row.color };
+        });
+
         // 3. 전체 누적 합계 (모든 시간)
         let totalQuery = `
             SELECT COALESCE(SUM(IFNULL(s.duration_seconds, TIMESTAMPDIFF(SECOND, s.start_time, UTC_TIMESTAMP()))), 0) as total 
@@ -357,6 +404,8 @@ exports.getStats = async (req, res) => {
             monthlyTotal: monthlyTotalResult[0].total,
             weeklyAvg: weeklyTotalResult[0].total / 7,
             monthlyAvg: monthlyTotalResult[0].total / 30,
+            subjectWeeklyAvgs,
+            subjectMonthlyAvgs,
             cumulativeTotal: totalTotalResult[0].total,
             debug: {
                 range: { start: rangeStart, end: rangeEnd },
@@ -377,10 +426,13 @@ exports.getStats = async (req, res) => {
     }
 };
 
-// 과목 목록 조회
+// 과목 목록 조회 (로그인한 사용자 전용)
 exports.getSubjects = async (req, res) => {
     try {
-        const subjects = await db.query("SELECT * FROM subjects ORDER BY name ASC");
+        const subjects = await db.query(
+            "SELECT * FROM subjects WHERE user_id = ? ORDER BY name ASC",
+            [req.user.id]
+        );
         res.json(subjects);
     } catch (err) {
         res.status(500).json({ error: '과목 조회 중 오류 발생' });
@@ -457,6 +509,72 @@ exports.deletePlan = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: '계획 삭제 중 오류 발생' });
+    }
+};
+
+// 과목 추가 (로그인한 사용자 전용)
+exports.addSubject = async (req, res) => {
+    const { name, color } = req.body;
+    const user_id = req.user.id;
+    if (!name || !name.trim()) {
+        return res.status(400).json({ error: '과목 이름을 입력하세요.' });
+    }
+    try {
+        const subjectColor = color || '#339af0';
+        await db.query(
+            "INSERT INTO subjects (user_id, name, color) VALUES (?, ?, ?)",
+            [user_id, name.trim(), subjectColor]
+        );
+        res.status(201).json({ message: '과목 추가 성공' });
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: '이미 존재하는 과목 이름입니다.' });
+        }
+        res.status(500).json({ error: '과목 추가 중 오류 발생' });
+    }
+};
+
+// 과목 수정 (소유자만 가능)
+exports.updateSubject = async (req, res) => {
+    const { id } = req.params;
+    const { name, color } = req.body;
+    const user_id = req.user.id;
+    if (!name || !name.trim()) {
+        return res.status(400).json({ error: '과목 이름을 입력하세요.' });
+    }
+    try {
+        const result = await db.query(
+            "UPDATE subjects SET name = ?, color = ? WHERE id = ? AND user_id = ?",
+            [name.trim(), color, id, user_id]
+        );
+        // affectedRows가 0이면 해당 과목이 없거나 다른 사용자 소유
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: '과목을 찾을 수 없습니다.' });
+        }
+        res.json({ message: '과목 수정 성공' });
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: '이미 존재하는 과목 이름입니다.' });
+        }
+        res.status(500).json({ error: '과목 수정 중 오류 발생' });
+    }
+};
+
+// 과목 삭제 (소유자만 가능)
+exports.deleteSubject = async (req, res) => {
+    const { id } = req.params;
+    const user_id = req.user.id;
+    try {
+        const result = await db.query(
+            "DELETE FROM subjects WHERE id = ? AND user_id = ?",
+            [id, user_id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: '과목을 찾을 수 없습니다.' });
+        }
+        res.json({ message: '과목 삭제 성공' });
+    } catch (err) {
+        res.status(500).json({ error: '과목 삭제 중 오류 발생' });
     }
 };
 

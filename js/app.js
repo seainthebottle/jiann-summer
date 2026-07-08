@@ -85,16 +85,16 @@ const appState = {
         // 테마 토글
         document.getElementById('theme-toggle').addEventListener('click', () => this.toggleTheme());
 
-        // 과목 추가 (관리자)
+        // 과목 추가 (모든 사용자)
         document.getElementById('add-subject-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('new-subject-name').value;
             const color = document.getElementById('new-subject-color').value;
             try {
-                await api.adminAddSubject(name, color);
+                await api.addSubject(name, color);
                 document.getElementById('new-subject-name').value = '';
-                this.loadAdminData();
-                this.loadSubjects(); // 일반 대시보드 과목 목록도 갱신
+                this.loadSubjectsPage();
+                this.loadSubjects(); // 대시보드 과목 드롭다운도 갱신
             } catch (err) {
                 alert(err.message);
             }
@@ -115,6 +115,27 @@ const appState = {
             } catch (err) {
                 alert(err.message);
             }
+        });
+
+        // 관리자 과목 추가
+        document.getElementById('admin-add-subject-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('admin-subject-user-select').value;
+            const name = document.getElementById('admin-new-subject-name').value;
+            const color = document.getElementById('admin-new-subject-color').value;
+            if (!userId) return alert('사용자를 선택하세요.');
+            try {
+                await api.adminAddSubject(userId, name, color);
+                document.getElementById('admin-new-subject-name').value = '';
+                this.loadAdminSubjects();
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        // 관리자 과목 사용자 선택
+        document.getElementById('admin-subject-user-select').addEventListener('change', () => {
+            this.loadAdminSubjects();
         });
 
         // 통계 페이지 사용자 선택 (관리자 전용)
@@ -206,6 +227,8 @@ const appState = {
 
     onLoginSuccess() {
         document.getElementById('navbar').classList.remove('hidden');
+        // 과목 관리는 모든 로그인 사용자에게 공개
+        document.getElementById('subjects-link').classList.remove('hidden');
         if (this.user.role === 'admin') {
             document.getElementById('admin-link').classList.remove('hidden');
         }
@@ -276,6 +299,7 @@ const appState = {
         } else {
             this.stopStatsUpdateTimer();
         }
+        if (pageId === 'subjects') this.loadSubjectsPage();
         if (pageId === 'admin') this.loadAdminData();
     },
 
@@ -377,11 +401,82 @@ const appState = {
         this.lastStatsDate = localDate;
 
         this.updateStatsUI();
+        this.renderWeekdayIndicator(localDate);
 
         window.charts.renderDailyPie(stats.sessions, localDate);
 
         // 날짜 네비게이션 버튼 상태 업데이트
         this.updateDateNavButtons();
+    },
+
+    renderWeekdayIndicator(localDateStr) {
+        const container = document.getElementById('weekday-indicator');
+        if (!container) return;
+
+        // 로컬 날짜 문자열을 로컬 시간 기준으로 파싱하여 요일 계산
+        const date = new Date(`${localDateStr}T00:00:00`);
+        const selectedDay = date.getDay(); // 0=일, 1=월, ..., 6=토
+        const labels = ['일', '월', '화', '수', '목', '금', '토'];
+
+        container.innerHTML = '';
+        // 선택일 기준으로 해당 주 일요일의 날짜 계산
+        const weekSunday = new Date(`${localDateStr}T00:00:00`);
+        weekSunday.setDate(weekSunday.getDate() - selectedDay);
+
+        const todayStr = this.getTodayDate();
+
+        labels.forEach((label, idx) => {
+            const isSelected = idx === selectedDay;
+
+            // 이 요일 박스가 가리키는 실제 날짜
+            const targetDate = new Date(weekSunday);
+            targetDate.setDate(weekSunday.getDate() + idx);
+            const year = targetDate.getFullYear();
+            const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+            const day = String(targetDate.getDate()).padStart(2, '0');
+            const targetDateStr = `${year}-${month}-${day}`;
+            const isFuture = targetDateStr > todayStr;
+            const isToday = targetDateStr === todayStr;
+
+            // 날짜 숫자 스타일: 오늘이면 굵게, 요일별 색 유지
+            const dateFontWeight = isToday ? '700' : '400';
+            const dateColor = idx === 0
+                ? (isToday ? '#ffa8a8' : '#fa5252')
+                : idx === 6
+                ? (isToday ? '#a5d8ff' : '#4dabf7')
+                : isToday ? 'var(--text-color)' : 'var(--text-secondary)';
+
+            const box = document.createElement('div');
+            box.style.cssText = `
+                width: 32px; height: 32px;
+                display: flex; align-items: center; justify-content: center;
+                border-radius: 6px;
+                font-size: 0.82rem; font-weight: 400;
+                background: ${isSelected ? (idx === 0 ? '#fa5252' : idx === 6 ? '#4dabf7' : 'var(--primary-color)') : 'rgba(0,0,0,0.04)'};
+                color: ${isSelected ? '#fff' : (idx === 0 ? '#fa5252' : idx === 6 ? '#4dabf7' : 'var(--text-secondary)')};
+                border: 1px solid ${isSelected ? 'transparent' : 'var(--border-color, #dee2e6)'};
+                opacity: ${isFuture ? '0.3' : '1'};
+                cursor: ${isFuture ? 'default' : 'pointer'};
+                transition: background 0.2s, opacity 0.2s;
+            `;
+            box.innerHTML = `
+                <div style="position: absolute; top: -13px; left: 50%; transform: translate(-50%, -50%); width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: ${dateFontWeight}; color: ${dateColor};">${targetDate.getDate()}</div>
+                ${label}
+            `;
+            box.style.position = 'relative';
+
+            if (!isFuture && !isSelected) {
+                box.addEventListener('click', () => {
+                    const dateInput = document.getElementById('stats-date-select');
+                    dateInput.value = targetDateStr;
+                    localStorage.setItem('saved_stats_date', targetDateStr);
+                    localStorage.setItem('last_stats_date_change', Date.now());
+                    this.loadStats();
+                });
+            }
+
+            container.appendChild(box);
+        });
     },
 
     updateStatsUI() {
@@ -404,7 +499,7 @@ const appState = {
         document.getElementById('stat-monthly-avg').textContent = this.formatSeconds((Number(stats.monthlyTotal) + diff) / 30);
 
         // 과목별 범례 생성/업데이트
-        this.renderSubjectLegend(stats.sessions, diff);
+        this.renderSubjectLegend(stats.sessions, diff, stats.subjectWeeklyAvgs || {}, stats.subjectMonthlyAvgs || {});
     },
 
     changeStatsDate(days) {
@@ -444,7 +539,7 @@ const appState = {
         nextBtn.disabled = (selectedDate >= today);
     },
 
-    renderSubjectLegend(sessions, activeDiff = 0) {
+    renderSubjectLegend(sessions, activeDiff = 0, subjectWeeklyAvgs = {}, subjectMonthlyAvgs = {}) {
         const legendContainer = document.getElementById('subject-stats-legend');
         if (!legendContainer) return;
         legendContainer.innerHTML = '';
@@ -469,25 +564,46 @@ const appState = {
             if (s.is_active) summary[s.subject_name].is_active = true;
         });
 
-        Object.entries(summary).forEach(([name, data]) => {
+        // 당일 sessions + 주간/월간 평균에 있는 과목을 모두 합산하여 표시
+        const allNames = new Set([
+            ...Object.keys(summary),
+            ...Object.keys(subjectWeeklyAvgs),
+            ...Object.keys(subjectMonthlyAvgs)
+        ]);
+
+        allNames.forEach(name => {
+            const data = summary[name];
+            const weeklyData = subjectWeeklyAvgs[name];
+            const monthlyData = subjectMonthlyAvgs[name];
+
+            // 색상: 당일 세션 > 주간 데이터 > 월간 데이터 > 기본값
+            const color = (data && data.color) || (weeklyData && weeklyData.color) || (monthlyData && monthlyData.color) || '#339af0';
+            const isActive = data ? data.is_active : false;
+            const dailyTime = data ? data.time : 0;
+            const displayTime = isActive ? dailyTime + activeDiff : dailyTime;
+
+            const weeklyAvg = (weeklyData ? weeklyData.avg : 0) + (isActive ? activeDiff / 7 : 0);
+            const monthlyAvg = (monthlyData ? monthlyData.avg : 0) + (isActive ? activeDiff / 30 : 0);
+
             const item = document.createElement('div');
             item.className = 'legend-item';
-            item.style.display = 'flex';
-            item.style.alignItems = 'center';
-            item.style.justifyContent = 'space-between';
             item.style.marginBottom = '10px';
-            item.style.padding = '8px';
+            item.style.padding = '8px 10px';
             item.style.borderRadius = '6px';
             item.style.background = 'rgba(0,0,0,0.02)';
 
-            const displayTime = data.is_active ? data.time + activeDiff : data.time;
-
             item.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${data.color};"></div>
-                    <span style="font-weight: 500; font-size: 0.95rem;">${name}${data.is_active ? ' (공부 중)' : ''}</span>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${color}; flex-shrink: 0;"></div>
+                        <span style="font-weight: 500; font-size: 0.95rem;">${name}${isActive ? ' (공부 중)' : ''}</span>
+                    </div>
+                    <span style="font-weight: 600; color: ${displayTime > 0 ? 'var(--primary-color)' : 'var(--text-secondary)'};">${this.formatSeconds(displayTime)}</span>
                 </div>
-                <span style="font-weight: 600; color: var(--primary-color);">${this.formatSeconds(displayTime)}</span>
+                <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-left: 22px; font-size: 0.78rem; color: var(--text-secondary);">
+                    <span>주간 일평균: <strong>${this.formatSeconds(weeklyAvg)}</strong></span>
+                    <span>월간 일평균: <strong>${this.formatSeconds(monthlyAvg)}</strong></span>
+                </div>
             `;
             legendContainer.appendChild(item);
         });
@@ -535,9 +651,84 @@ const appState = {
             userList.appendChild(li);
         });
 
-        const subjects = await api.getSubjects();
+        // 과목 관리 사용자 드롭다운 동기화
+        const subjectUserSelect = document.getElementById('admin-subject-user-select');
+        const currentVal = subjectUserSelect.value;
+        subjectUserSelect.innerHTML = '';
+        users.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.id;
+            opt.textContent = `${u.username} (${u.role})`;
+            subjectUserSelect.appendChild(opt);
+        });
+        // 기존 선택값 유지, 없으면 첫 번째 사용자
+        if (currentVal && Array.from(subjectUserSelect.options).some(o => o.value === currentVal)) {
+            subjectUserSelect.value = currentVal;
+        }
+        this.loadAdminSubjects();
+    },
+
+    // 관리자 - 선택된 사용자의 과목 목록 로드
+    async loadAdminSubjects() {
+        const userId = document.getElementById('admin-subject-user-select').value;
+        if (!userId) return;
+        const subjects = await api.adminGetSubjects(userId);
         const subList = document.getElementById('admin-subject-list');
         subList.innerHTML = '';
+
+        if (subjects.length === 0) {
+            subList.innerHTML = '<li style="color: var(--text-secondary); padding: 10px 0;">등록된 과목이 없습니다.</li>';
+            return;
+        }
+
+        subjects.forEach(s => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div style="display: flex; gap: 10px; align-items: center; width: 100%;">
+                    <input type="color" id="admin-subj-color-${s.id}" value="${s.color || '#339af0'}" style="padding: 0; width: 30px; height: 30px;">
+                    <input type="text" id="admin-subj-name-${s.id}" value="${s.name}" style="flex: 1; padding: 5px; margin-bottom: 0;">
+                    <button class="btn-small" onclick="appState.adminUpdateSubject(${s.id})" style="padding: 5px 10px;">수정</button>
+                    <button class="delete-btn" onclick="appState.adminDeleteSubject(${s.id})" style="padding: 5px 10px;">삭제</button>
+                </div>
+            `;
+            subList.appendChild(li);
+        });
+    },
+
+    async adminUpdateSubject(id) {
+        const name = document.getElementById(`admin-subj-name-${id}`).value;
+        const color = document.getElementById(`admin-subj-color-${id}`).value;
+        if (!name) return alert('과목 이름을 입력하세요.');
+        try {
+            await api.adminUpdateSubject(id, name, color);
+            alert('과목이 수정되었습니다.');
+            this.loadAdminSubjects();
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async adminDeleteSubject(id) {
+        if (!confirm('정말 삭제하시겠습니까?')) return;
+        try {
+            await api.adminDeleteSubject(id);
+            this.loadAdminSubjects();
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    // 과목 관리 페이지 로드 (모든 사용자)
+    async loadSubjectsPage() {
+        const subjects = await api.getSubjects();
+        const subList = document.getElementById('subject-manage-list');
+        subList.innerHTML = '';
+
+        if (subjects.length === 0) {
+            subList.innerHTML = '<li style="color: var(--text-secondary); padding: 10px 0;">등록된 과목이 없습니다. 위에서 추가해 주세요.</li>';
+            return;
+        }
+
         subjects.forEach(s => {
             const li = document.createElement('li');
             li.innerHTML = `
@@ -557,9 +748,9 @@ const appState = {
         const color = document.getElementById(`subj-color-${id}`).value;
         if (!name) return alert('과목 이름을 입력하세요.');
         try {
-            await api.adminUpdateSubject(id, name, color);
+            await api.updateSubject(id, name, color);
             alert('과목이 수정되었습니다.');
-            this.loadAdminData();
+            this.loadSubjectsPage();
             this.loadSubjects();
         } catch (err) {
             alert(err.message);
@@ -579,8 +770,8 @@ const appState = {
     async deleteSubject(id) {
         if (!confirm('정말 삭제하시겠습니까?')) return;
         try {
-            await api.adminDeleteSubject(id);
-            this.loadAdminData();
+            await api.deleteSubject(id);
+            this.loadSubjectsPage();
             this.loadSubjects();
         } catch (err) {
             alert(err.message);

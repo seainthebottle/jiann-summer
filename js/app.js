@@ -938,13 +938,30 @@ const appState = {
                 li.dataset.estimatedMinutes = plan.estimated_minutes;
                 li.style.borderLeft = `6px solid ${plan.subject_color || '#339af0'}`;
 
-                // 진행 상황 계산 (초과 진행률 목표 마커 위치 계산 포함)
+                // 진행 상황 계산 (남은 시간 및 초과 시간 위주의 프로그레스 바 연산)
                 const estSec = plan.estimated_minutes * 60;
                 const curSec = plan.completed_seconds;
-                const maxSec = Math.max(estSec, curSec);
                 
-                const progressPercent = (curSec / maxSec) * 100;
-                const targetPercent = (estSec / maxSec) * 100;
+                let progressPercent = 0;
+                let progressBarColor = plan.subject_color || '#339af0';
+
+                // 남은 공부 시간 위주로 프로그레스 바를 갱신합니다.
+                if (curSec < estSec) {
+                    // 목표 달성 전: 남은 공부 시간 비율 (공부할수록 100%에서 0%로 감소)
+                    progressPercent = estSec > 0 ? ((estSec - curSec) / estSec) * 100 : 0;
+                } else {
+                    // 목표 달성 후 (초과): 초과한 공부 시간 비율 (0%에서 100%로 다시 증가, 최대 100% 캡)
+                    progressPercent = estSec > 0 ? Math.min(((curSec - estSec) / estSec) * 100, 100) : 100;
+                    progressBarColor = 'var(--danger-color)'; // 초과되었을 때 빨간색 경고 컬러 적용
+                }
+
+                // 남은 시간 혹은 초과 시간의 초기 HTML을 구성합니다.
+                let remainingHtml = '';
+                if (curSec < estSec) {
+                    remainingHtml = `<div class="time-remaining-wrapper status-remaining">남은 시간: <span class="time-remaining">${this.formatMinutesSeconds(estSec - curSec)}</span></div>`;
+                } else {
+                    remainingHtml = `<div class="time-remaining-wrapper status-over"><span class="time-remaining">${this.formatMinutesSeconds(curSec - estSec)} 초과</span></div>`;
+                }
 
                 // 버튼 구성
                 let actionButtons = '';
@@ -974,18 +991,22 @@ const appState = {
                     </div>
                     
                     <div class="plan-progress-container">
-                        <div class="plan-progress-bar" style="width: ${progressPercent}%; background-color: ${plan.subject_color || '#339af0'}"></div>
-                        <div class="plan-target-marker" style="left: ${targetPercent}%"></div>
+                        <!-- 목표 마커를 제거하고 바의 채워짐이 남은/초과 비율을 정밀 지시하도록 단순화합니다. -->
+                        <div class="plan-progress-bar" style="width: ${progressPercent}%; background-color: ${progressBarColor}"></div>
                     </div>
                     
                     <div class="plan-time-info">
                         <div>진행: <span class="time-current">${this.formatMinutesSeconds(curSec)}</span></div>
                         <div>목표: <span>${plan.estimated_minutes}분</span></div>
+                        ${remainingHtml}
                     </div>
                     
                     <div class="plan-actions">
                         ${actionButtons}
-                        <button class="btn-plan-action btn-plan-delete" onclick="appState.deletePlan(${plan.id})">삭제</button>
+                        <!-- 현재 타이머가 진행 중이거나 이미 공부 시간이 0초를 초과하여 기록된 계획은 삭제할 수 없도록 비활성화 처리합니다. -->
+                        <button class="btn-plan-action btn-plan-delete" 
+                                ${isRunningThis || plan.completed_seconds > 0 ? 'disabled title="진행 중이거나 공부 기록이 있는 계획은 삭제할 수 없습니다."' : ''} 
+                                onclick="appState.deletePlan(${plan.id})">삭제</button>
                     </div>
                 `;
                 plansList.appendChild(li);

@@ -42,7 +42,17 @@ const charts = {
                 dataValues.push(studyMins);
                 backgroundColors.push(session.color);
                 labels.push(session.is_active ? `${session.subject_name} (Active)` : session.subject_name);
-                tooltipLabels.push(`${session.subject_name}: ${Math.floor(studyMins)}분${session.is_active ? ' (진행중)' : ''}`);
+                
+                // 해당 공부 세션이 계획과 연동되어 공부한 것이라면 툴팁 텍스트에 계획 제목을 추가하여 가시성을 확보합니다.
+                let tooltipText = `${session.subject_name}: ${Math.floor(studyMins)}분`;
+                if (session.plan_title) {
+                    tooltipText += ` (${session.plan_title})`;
+                }
+                if (session.is_active) {
+                    tooltipText += ' (진행중)';
+                }
+                
+                tooltipLabels.push(tooltipText);
                 sessionStatus.push({ active: session.is_active, color: session.color });
             }
 

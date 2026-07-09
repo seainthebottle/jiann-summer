@@ -187,12 +187,15 @@ exports.getStats = async (req, res) => {
 
 
         // 1. 선택일 시간대별 공부 분포 (24시간 파이 차트용)
+        // 각 공부 세션이 계획과 연동되어 있다면 계획 제목(plan_title)도 함께 조회합니다.
         let sessionsQuery = `
             SELECT s.start_time, IF(s.end_time IS NULL, UTC_TIMESTAMP(), s.end_time) as actual_end, 
                    sub.name as subject_name, sub.color,
-                   (s.end_time IS NULL) as is_active
+                   (s.end_time IS NULL) as is_active,
+                   p.title as plan_title
             FROM study_sessions s
             LEFT JOIN subjects sub ON s.subject_id = sub.id
+            LEFT JOIN plans p ON s.plan_id = p.id
             WHERE s.user_id = ? 
               AND s.start_time <= ? 
               AND IFNULL(s.end_time, UTC_TIMESTAMP()) >= ?
@@ -201,8 +204,6 @@ exports.getStats = async (req, res) => {
         const sqlRangeStart = isoToSQLDateTime(rangeStart);
         const sqlRangeEnd = isoToSQLDateTime(rangeEnd);
         let sessionsParams = [user_id, sqlRangeEnd, sqlRangeStart];
-
-
 
         if (subjectId && subjectId !== 'null' && subjectId !== '') {
             sessionsQuery += ` AND s.subject_id = ?`;
@@ -222,7 +223,6 @@ exports.getStats = async (req, res) => {
             let start = parseUTCDate(session.start_time);
             let end = parseUTCDate(session.actual_end);
 
-            
             if (start < dayStart) start = dayStart;
             if (end > dayEnd) end = dayEnd;
             if (start >= end) return;
@@ -230,16 +230,16 @@ exports.getStats = async (req, res) => {
             const duration = Math.floor((end - start) / 1000);
             manualDailyTotal += duration;
 
-            console.log(`[Stats Debug] Session ${idx}: ${session.subject_name}, Start: ${start.toISOString()}, End: ${end.toISOString()}, Duration: ${duration}s, Active: ${session.is_active}`);
+            console.log(`[Stats Debug] Session ${idx}: ${session.subject_name}, Start: ${start.toISOString()}, End: ${end.toISOString()}, Duration: ${duration}s, Active: ${session.is_active}, PlanTitle: ${session.plan_title}`);
             
             sessions.push({
                 subject_name: session.subject_name,
                 color: session.color || '#339af0',
                 start: start.toISOString(),
                 end: end.toISOString(),
-                is_active: !!session.is_active
+                is_active: !!session.is_active,
+                plan_title: session.plan_title || null
             });
-
         });
 
         console.log(`[Stats Debug] Manual JS Daily Total: ${manualDailyTotal}s`);
@@ -501,6 +501,32 @@ exports.deletePlan = async (req, res) => {
     const user_id = req.user.id;
     const { id } = req.params;
     try {
+        // 1. 해당 계획이 존재하는지 및 이미 누적 기록(completed_seconds)이 존재하여 진행이 되었는지 검사합니다.
+        const planResult = await db.query(
+            "SELECT completed_seconds FROM plans WHERE id = ? AND user_id = ?",
+            [id, user_id]
+        );
+        if (planResult.length === 0) {
+            return res.status(404).json({ error: '계획을 찾을 수 없습니다.' });
+        }
+
+        const plan = planResult[0];
+
+        // 누적 기록된 시간이 0초를 초과하는 경우 삭제할 수 없습니다.
+        if (plan.completed_seconds > 0) {
+            return res.status(400).json({ error: '진행 기록이 존재하는 계획은 삭제할 수 없습니다.' });
+        }
+
+        // 2. study_sessions 테이블에 해당 계획과 연동된 세션 기록(현재 공부 중이거나 완료된 세션)이 존재하는지 검사합니다.
+        const sessionResult = await db.query(
+            "SELECT id FROM study_sessions WHERE plan_id = ? AND user_id = ? LIMIT 1",
+            [id, user_id]
+        );
+        if (sessionResult.length > 0) {
+            return res.status(400).json({ error: '이미 시작되었거나 기록이 존재하는 계획은 삭제할 수 없습니다.' });
+        }
+
+        // 3. 검증을 모두 통과하면 계획을 데이터베이스에서 삭제합니다.
         await db.query(
             `DELETE FROM plans WHERE id = ? AND user_id = ?`,
             [id, user_id]

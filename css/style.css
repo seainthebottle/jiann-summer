@@ -675,18 +675,35 @@ select:focus {
 }
 
 .plan-time-info .time-current {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* 남은 공부 시간 혹은 초과 시간을 위한 기본 래퍼 스타일: 남은 시간/초과 시간 위주 표시를 위해 글자 굵기를 두껍게 강조합니다. */
+.time-remaining-wrapper {
     font-weight: 700;
+}
+
+/* 남은 공부 시간: 기존 진행 시간에 쓰이던 테마 포인트 컬러(--primary-color)를 입혀 시각적으로 가장 먼저 드러나게 합니다. */
+.status-remaining {
     color: var(--primary-color);
 }
 
-/* 진행 상황 막대 (Progress Bar) */
+/* 목표 공부 시간 초과: 붉은색 경고 컬러(--danger-color)를 입혀 초과 상태임을 한눈에 인지하도록 합니다. */
+.status-over {
+    color: var(--danger-color);
+}
+
+/* 진행 상황 막대 (Progress Bar) 컨테이너: 우측 정렬을 가하여 남은 시간 감소 시 왼쪽부터 비워지게 합니다. */
 .plan-progress-container {
     height: 12px;
     background-color: var(--border-color);
     border-radius: 6px;
     width: 100%;
     position: relative;
-    overflow: visible; /* 마커가 삐져나갈 수 있으므로 보임 처리 */
+    overflow: hidden; /* 라운드 보더 영역 바깥으로 진행률 바가 삐져나가지 않도록 숨김 처리합니다. */
+    display: flex;
+    justify-content: flex-end; /* 우측 정렬: 왼쪽에서부터 서서히 비워져 우측 끝으로 짧아지도록 만듭니다. */
 }
 
 .plan-progress-bar {
@@ -765,8 +782,17 @@ select:focus {
     border: 1px solid var(--danger-color);
 }
 
-.btn-plan-delete:hover {
+.btn-plan-delete:hover:not(:disabled) {
     background-color: rgba(255, 107, 107, 0.1);
+}
+
+/* 공부 기록이 있어서 삭제할 수 없을 때 버튼의 스타일링을 톤다운(비활성화) 처리합니다. */
+.btn-plan-delete:disabled {
+    color: var(--secondary-color);
+    border-color: var(--border-color);
+    background-color: transparent;
+    cursor: not-allowed;
+    opacity: 0.5;
 }
 
 /* 계획 완료 취소 버튼 스타일 */

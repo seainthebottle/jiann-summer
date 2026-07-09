@@ -108,19 +108,43 @@ const timer = {
                     timeText.textContent = this.formatMinutesSeconds(totalCompleted);
                 }
 
-                // 진행률 바 & 목표 마커 갱신 (사용자 피드백 수식 적용)
-                const maxTime = Math.max(estimated, totalCompleted);
-                const progressPercent = (totalCompleted / maxTime) * 100;
-                const targetPercent = (estimated / maxTime) * 100;
+                // 남은 시간 혹은 초과 시간을 실시간으로 연산하여 엘리먼트 텍스트 및 스타일 클래스를 갱신합니다.
+                const remainingWrapper = card.querySelector('.time-remaining-wrapper');
+                if (remainingWrapper) {
+                    if (totalCompleted < estimated) {
+                        const diffSec = estimated - totalCompleted;
+                        remainingWrapper.innerHTML = `남은 시간: <span class="time-remaining">${this.formatMinutesSeconds(diffSec)}</span>`;
+                        remainingWrapper.className = 'time-remaining-wrapper status-remaining';
+                    } else {
+                        const diffSec = totalCompleted - estimated;
+                        remainingWrapper.innerHTML = `<span class="time-remaining">${this.formatMinutesSeconds(diffSec)} 초과</span>`;
+                        remainingWrapper.className = 'time-remaining-wrapper status-over';
+                    }
+                }
+
+                // 진행률 바 갱신 (남은 시간 및 초과 시간 위주의 실시간 수식 적용)
+                let progressPercent = 0;
+                let progressBarColor = '#339af0';
+
+                // 과목 고유 배지의 배경색으로부터 과목 색상을 추출해 기본 바 색상으로 지정합니다.
+                const subjectBadge = card.querySelector('.plan-subject-badge');
+                if (subjectBadge) {
+                    progressBarColor = subjectBadge.style.backgroundColor;
+                }
+
+                if (totalCompleted < estimated) {
+                    // 목표 달성 전: 남은 공부 시간 비율 (공부할수록 100%에서 0%로 감소)
+                    progressPercent = estimated > 0 ? ((estimated - totalCompleted) / estimated) * 100 : 0;
+                } else {
+                    // 목표 달성 후 (초과): 초과한 공부 시간 비율 (0%에서 100%로 다시 증가, 최대 100% 캡)
+                    progressPercent = estimated > 0 ? Math.min(((totalCompleted - estimated) / estimated) * 100, 100) : 100;
+                    progressBarColor = 'var(--danger-color)'; // 초과되었을 때 빨간색 경고 컬러 적용
+                }
 
                 const progressBar = card.querySelector('.plan-progress-bar');
                 if (progressBar) {
                     progressBar.style.width = `${progressPercent}%`;
-                }
-
-                const targetMarker = card.querySelector('.plan-target-marker');
-                if (targetMarker) {
-                    targetMarker.style.left = `${targetPercent}%`;
+                    progressBar.style.backgroundColor = progressBarColor;
                 }
             }
         }

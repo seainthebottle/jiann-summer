@@ -61,7 +61,7 @@ exports.startSession = async (req, res) => {
         res.json({ message: '공부 시작!' });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: '서버 오류 발생' });
+        res.status(500).json({ error: '공부 시작 서버 오류: ' + err.message });
     }
 };
 
@@ -130,7 +130,7 @@ exports.stopSession = async (req, res) => {
         res.json({ message: '공부 종료!' });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: '서버 오류 발생' });
+        res.status(500).json({ error: '공부 종료 서버 오류: ' + err.message });
     }
 };
 
@@ -509,6 +509,31 @@ exports.deletePlan = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: '계획 삭제 중 오류 발생' });
+    }
+};
+
+// 계획 완료 취소 처리 (진행 시간에 따라 todo 또는 in_progress 상태로 복구)
+exports.undonePlan = async (req, res) => {
+    const user_id = req.user.id;
+    const { id } = req.params;
+    try {
+        // 계획 정보를 조회하여 완료 시간을 되돌릴 상태(todo 또는 in_progress)를 결정합니다.
+        const planRes = await db.query("SELECT completed_seconds FROM plans WHERE id = ? AND user_id = ?", [id, user_id]);
+        if (planRes.length === 0) {
+            return res.status(404).json({ error: '계획을 찾을 수 없습니다.' });
+        }
+        
+        const completedSeconds = planRes[0].completed_seconds;
+        const nextStatus = completedSeconds > 0 ? 'in_progress' : 'todo';
+
+        await db.query(
+            `UPDATE plans SET status = ? WHERE id = ? AND user_id = ?`,
+            [nextStatus, id, user_id]
+        );
+        res.json({ message: '계획 완료 처리가 취소되었습니다.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: '계획 완료 취소 중 오류 발생: ' + err.message });
     }
 };
 

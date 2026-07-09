@@ -177,23 +177,46 @@ const appState = {
             this.updateStudyButtonState();
         });
 
-        // 계획 예상 시간 슬라이더 - 숫자 입력 동기화
+        // 계획 예상 시간 슬라이더 - 숫자 입력 동기화 (실시간 연동 및 검증)
         const planSlider = document.getElementById('plan-time-slider');
         const planNumber = document.getElementById('plan-time-number');
         if (planSlider && planNumber) {
+            // 슬라이더를 움직일 때 숫자 입력창의 값을 실시간으로 동기화합니다.
             planSlider.addEventListener('input', () => {
                 planNumber.value = planSlider.value;
             });
+            
+            // 숫자 입력창에 값을 타이핑할 때 실시간으로 슬라이더에 반영합니다.
             planNumber.addEventListener('input', () => {
-                let val = parseInt(planNumber.value) || 10;
-                if (val < 10) val = 10;
-                if (val > 60) val = 60;
-                planSlider.value = val;
+                const rawVal = planNumber.value;
+                if (rawVal === '') return; // 입력값을 지워 빈 칸인 상태에서는 보정 처리를 하지 않아 자연스러운 타이핑을 유도합니다.
+                
+                let val = parseInt(rawVal);
+                if (isNaN(val)) return;
+
+                // 최대 60분까지로 제한하므로 60을 초과하면 즉시 60으로 제한합니다.
+                if (val > 60) {
+                    val = 60;
+                    planNumber.value = val;
+                }
+                
+                // 1분 미만(예: 0)일 때 즉시 1로 보정해버리면 '15'를 치기 위해 '1'을 입력할 때 방해가 되므로,
+                // 유효 범위(1~60) 내의 정상적인 숫자인 경우에만 슬라이더의 위치를 실시간으로 맞춥니다.
+                if (val >= 1 && val <= 60) {
+                    planSlider.value = val;
+                }
             });
+
+            // 숫자 입력창에서 포커스를 잃거나 값 변경이 완료되었을 때 최종 유효성 검사를 수행합니다.
             planNumber.addEventListener('change', () => {
-                let val = parseInt(planNumber.value) || 10;
-                if (val < 10) val = 10;
-                if (val > 60) val = 60;
+                let val = parseInt(planNumber.value);
+                // 입력값이 숫자가 아니거나 1 미만일 경우 최솟값인 1로 설정합니다.
+                if (isNaN(val) || val < 1) {
+                    val = 1;
+                } else if (val > 60) {
+                    // 60분을 초과하는 경우 최댓값인 60으로 설정합니다.
+                    val = 60;
+                }
                 planNumber.value = val;
                 planSlider.value = val;
             });
@@ -386,8 +409,14 @@ const appState = {
     async loadStats() {
         // 관리자가 명시적으로 사용자를 선택하지 않았을 경우, 현재 드롭다운의 값을 사용하거나 기본값(본인) 사용
         const userId = this.user.role === 'admin' ? document.getElementById('admin-user-select').value : null;
-        const localDate = document.getElementById('stats-date-select').value;
+        let localDate = document.getElementById('stats-date-select').value;
         const subjectId = document.getElementById('stats-subject-select').value;
+        
+        // 통계 페이지를 방문하지 않아 날짜 필드가 비어있는 경우 안전 장치를 적용합니다.
+        if (!localDate) {
+            this.updateStatsDateIfExpired();
+            localDate = document.getElementById('stats-date-select').value || this.getTodayDate();
+        }
         
         // 로컬 날짜의 시작과 끝을 ISO(UTC) 문자열로 변환
         const startDate = new Date(`${localDate}T00:00:00`).toISOString();
@@ -909,7 +938,11 @@ const appState = {
                     actionButtons = `<button class="btn-plan-action btn-plan-stop" onclick="appState.stopPlan()">정지</button>`;
                 } else {
                     if (plan.status === 'done') {
-                        actionButtons = `<span style="font-size: 0.8rem; font-weight: 700; color: var(--success-color); padding: 6px 0;">완료됨</span>`;
+                        // 완료된 계획은 '완료됨' 표시와 함께 완료 취소 버튼을 노출합니다.
+                        actionButtons = `
+                            <span style="font-size: 0.8rem; font-weight: 700; color: var(--success-color); padding: 6px 0; margin-right: 8px;">완료됨</span>
+                            <button class="btn-plan-action btn-plan-undone" onclick="appState.undonePlan(${plan.id})">완료 취소</button>
+                        `;
                     } else {
                         actionButtons = `
                             <button class="btn-plan-action btn-plan-start" onclick="appState.startPlan(${plan.id}, ${plan.subject_id})">시작</button>
@@ -998,6 +1031,16 @@ const appState = {
     async donePlan(planId) {
         try {
             await api.donePlan(planId);
+            await this.loadPlans();
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    // 계획 완료 취소 처리 (상태를 진행 상황에 맞춰 복원)
+    async undonePlan(planId) {
+        try {
+            await api.undonePlan(planId);
             await this.loadPlans();
         } catch (err) {
             alert(err.message);

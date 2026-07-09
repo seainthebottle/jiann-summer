@@ -104,6 +104,13 @@ const api = {
         });
     },
 
+    // 계획 완료 취소 API
+    async undonePlan(planId) {
+        return await this.request(`/study/plans/${planId}/undone`, {
+            method: 'POST'
+        });
+    },
+
     async deletePlan(planId) {
         return await this.request(`/study/plans/${planId}`, {
             method: 'DELETE'

@@ -113,8 +113,47 @@ async function checkAdmin() {
     }
 }
 
+// DB 자동 마이그레이션 실행 함수 (원격 서버 자동 반영용)
+async function runMigrations() {
+    try {
+        console.log('--- DB 자동 마이그레이션 검사 시작 ---');
+        
+        // 1. plans 테이블 생성
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS plans (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                subject_id INT NOT NULL,
+                title VARCHAR(255) NOT NULL,
+                estimated_minutes INT NOT NULL,
+                completed_seconds INT DEFAULT 0,
+                status VARCHAR(20) DEFAULT 'todo',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('[Migration] plans 테이블 정상 존재 여부 검사 완료.');
+
+        // 2. study_sessions 테이블에 plan_id 컬럼 추가 시도
+        try {
+            await db.query("ALTER TABLE study_sessions ADD COLUMN plan_id INT DEFAULT NULL");
+            console.log('[Migration] study_sessions 테이블에 plan_id 컬럼이 성공적으로 추가되었습니다.');
+        } catch (err) {
+            // 컬럼이 이미 존재하는 경우(ER_DUP_FIELDNAME: 1060)는 정상적인 상태이므로 에러 처리 없이 넘어갑니다.
+            if (err.code === 'ER_DUP_FIELDNAME' || err.errno === 1060) {
+                console.log('[Migration] study_sessions 테이블에 plan_id 컬럼이 이미 존재합니다.');
+            } else {
+                throw err;
+            }
+        }
+        console.log('--- DB 자동 마이그레이션 검사 완료 ---');
+    } catch (err) {
+        console.error('[Migration Error] 마이그레이션 실행 중 실패:', err.message);
+    }
+}
+
 // 서버 시작
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server is running on port ${PORT} (Available for remote access)`);
+    await runMigrations(); // 서버 실행 시 마이그레이션 자동 검증 및 테이블/컬럼 보정
     await checkAdmin();
 });

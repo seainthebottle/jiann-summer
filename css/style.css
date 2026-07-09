@@ -489,7 +489,7 @@ select:focus {
 /* 공부 계획 섹션 스타일 */
 .plans-section {
     max-width: 500px;
-    margin: 40px auto 20px;
+    margin: 20px auto 20px;
     background-color: var(--card-bg);
     padding: 24px;
     border-radius: 16px;
@@ -512,7 +512,7 @@ select:focus {
     display: flex;
     flex-direction: column;
     gap: 15px;
-    margin-bottom: 25px;
+    margin-bottom: 0;
 }
 
 .plan-time-container {
@@ -585,7 +585,8 @@ select:focus {
 
 /* 계획 리스트 */
 .plans-list-container {
-    margin-top: 15px;
+    max-width: 500px;
+    margin: 20px auto 0;
 }
 
 .plans-empty-msg {
@@ -755,6 +756,18 @@ select:focus {
 
 .btn-plan-delete:hover {
     background-color: rgba(255, 107, 107, 0.1);
+}
+
+/* 계획 완료 취소 버튼 스타일 */
+.btn-plan-undone {
+    background-color: var(--border-color, #dee2e6);
+    color: var(--text-color, #495057);
+    border: 1px solid var(--border-color, #dee2e6);
+}
+
+.btn-plan-undone:hover {
+    background-color: #adb5bd;
+    color: white;
 }
 
 @keyframes pulse {

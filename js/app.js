@@ -369,6 +369,8 @@ const appState = {
             const opt = document.createElement('option');
             opt.value = sub.id;
             opt.textContent = sub.name;
+            // 과목 선택 시 버튼 색상 동적 변경을 위해 옵션 엘리먼트에 색상 정보를 데이터셋으로 주입합니다.
+            opt.dataset.color = sub.color || '#339af0';
             select.appendChild(opt);
             
             const statsOpt = document.createElement('option');
@@ -875,21 +877,33 @@ const appState = {
         if (btn.classList.contains('btn-stop')) return;
 
         const subjectId = select.value;
-        const subjectName = select.options[select.selectedIndex]?.text || '';
+        const selectedOption = select.options[select.selectedIndex];
+        const subjectName = selectedOption?.text || '';
+        const subjectColor = selectedOption?.dataset.color || '';
 
         if (subjectId) {
             btn.disabled = false;
             btn.textContent = `${subjectName} 공부 시작`;
+            // 선택된 과목의 고유 색상을 버튼의 CSS 변수(--subject-color)로 주입합니다.
+            btn.style.setProperty('--subject-color', subjectColor);
+            
             if (planBtn) {
                 planBtn.disabled = false;
                 planBtn.textContent = `"${subjectName}" 과목으로 계획 추가`;
+                // 선택된 과목의 고유 색상을 계획 추가 버튼의 CSS 변수(--subject-color)로 주입합니다.
+                planBtn.style.setProperty('--subject-color', subjectColor);
             }
         } else {
             btn.disabled = true;
             btn.textContent = '과목을 선택하세요';
+            // 선택 해제 시 적용했던 CSS 변수를 삭제하여 기본 테마 스타일로 복구시킵니다.
+            btn.style.removeProperty('--subject-color');
+            
             if (planBtn) {
                 planBtn.disabled = true;
                 planBtn.textContent = '과목을 선택해주세요';
+                // 선택 해제 시 계획 추가 버튼에 적용했던 CSS 변수를 삭제합니다.
+                planBtn.style.removeProperty('--subject-color');
             }
         }
     },

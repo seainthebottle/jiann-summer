@@ -185,9 +185,17 @@ select:focus {
     background-color: var(--primary-hover);
 }
 
+/* 공부 시작 버튼: 과목이 선택되었을 때 해당 과목 색상(--subject-color)을 톤다운(12% 믹스)하여 배경색으로 사용하고, 테두리와 글자색으로 포인트를 줍니다. */
 .btn-start {
-    background-color: var(--success-color);
-    color: white;
+    background-color: color-mix(in srgb, var(--subject-color, var(--success-color)) 12%, var(--card-bg));
+    color: var(--subject-color, var(--success-color));
+    border: 1.5px solid color-mix(in srgb, var(--subject-color, var(--success-color)) 30%, var(--card-bg));
+}
+
+/* 공부 시작 버튼 호버: 과목 색상의 비중을 20%로 높이고 테두리 색을 원색으로 밝혀 피드백을 줍니다. */
+#study-toggle-btn.btn-start:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--subject-color, var(--success-color)) 20%, var(--card-bg));
+    border-color: var(--subject-color, var(--success-color));
 }
 
 .btn-stop {
@@ -561,11 +569,12 @@ select:focus {
     transform: scale(1.2);
 }
 
+/* 계획 추가 버튼: 과목이 선택되었을 때 해당 과목 색상(--subject-color)을 톤다운(12% 믹스)하여 배경색으로 사용하고, 테두리와 글자색으로 포인트를 줍니다. */
 .btn-secondary {
-    background-color: var(--primary-color);
-    color: white;
-    padding: 12px;
-    border: none;
+    background-color: color-mix(in srgb, var(--subject-color, var(--primary-color)) 12%, var(--card-bg));
+    color: var(--subject-color, var(--primary-color));
+    border: 1.5px solid color-mix(in srgb, var(--subject-color, var(--primary-color)) 30%, var(--card-bg));
+    padding: 12.5px; /* 보더가 추가되었으므로 레이아웃 높이 유지를 위해 패딩을 약간 보정합니다. */
     border-radius: 8px;
     font-size: 0.95rem;
     font-weight: 600;
@@ -573,8 +582,10 @@ select:focus {
     transition: var(--transition);
 }
 
+/* 계획 추가 버튼 호버: 과목 색상의 비중을 20%로 높이고 테두리 색을 원색으로 밝혀 피드백을 줍니다. */
 .btn-secondary:hover:not(:disabled) {
-    background-color: var(--primary-hover);
+    background-color: color-mix(in srgb, var(--subject-color, var(--primary-hover)) 20%, var(--card-bg));
+    border-color: var(--subject-color, var(--primary-hover));
 }
 
 .btn-secondary:disabled {

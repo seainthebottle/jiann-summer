@@ -1,7 +1,7 @@
 const appState = {
     user: null,
     currentPage: 'auth',
-    version: 'v11',
+    version: 'v16',
     initialized: false,
 
     async init() {
@@ -915,7 +915,12 @@ const appState = {
         if (!plansList) return;
 
         try {
-            const plans = await api.getPlans();
+            // 로컬 오늘 날짜 기준 00:00:00 ~ 23:59:59.999 의 범위를 구해 ISO(UTC) 시간으로 전달합니다.
+            const todayLocal = this.getTodayDate();
+            const startDate = new Date(`${todayLocal}T00:00:00`).toISOString();
+            const endDate = new Date(`${todayLocal}T23:59:59.999`).toISOString();
+
+            const plans = await api.getPlans(startDate, endDate);
             plansList.innerHTML = '';
 
             if (!plans || plans.length === 0) {
@@ -982,6 +987,40 @@ const appState = {
                     }
                 }
 
+                // 삭제 버튼은 삭제가 가능한 경우(현재 공부 중이지 않고 공부 기록이 0초인 경우)에만 렌더링합니다.
+                const isDeletable = !isRunningThis && plan.completed_seconds === 0;
+                const deleteButtonHtml = isDeletable 
+                    ? `<button class="btn-plan-action btn-plan-delete" onclick="appState.deletePlan(${plan.id})">삭제</button>` 
+                    : '';
+
+                // 시작 시각 및 완료 시각 포맷팅 (로컬 시간 기준)
+                let startedTimeText = '-';
+                if (plan.started_at) {
+                    const sDate = new Date(plan.started_at);
+                    startedTimeText = `${String(sDate.getHours()).padStart(2, '0')}:${String(sDate.getMinutes()).padStart(2, '0')}`;
+                }
+
+                let completedTimeText = '-';
+                if (plan.completed_at) {
+                    const cDate = new Date(plan.completed_at);
+                    completedTimeText = `${String(cDate.getHours()).padStart(2, '0')}:${String(cDate.getMinutes()).padStart(2, '0')}`;
+                } else if (plan.status === 'in_progress' || isRunningThis) {
+                    completedTimeText = '공부 중';
+                }
+
+                // 누적 소요 시간 계산
+                let durationText = '';
+                if (plan.completed_seconds > 0) {
+                    durationText = ` (${this.formatMinutesSeconds(plan.completed_seconds)})`;
+                }
+
+                const timeRangeHtml = `
+                    <div class="plan-time-range" style="font-size: 0.76rem; color: var(--text-secondary); display: flex; gap: 8px; margin-right: auto; align-items: center;">
+                        <div>시작: <strong style="color: var(--text-color);">${startedTimeText}</strong></div>
+                        <div>완료: <strong style="color: var(--text-color);">${completedTimeText}</strong>${durationText}</div>
+                    </div>
+                `;
+
                 li.innerHTML = `
                     <div class="plan-card-header">
                         <div class="plan-title-wrapper">
@@ -1001,12 +1040,10 @@ const appState = {
                         ${remainingHtml}
                     </div>
                     
-                    <div class="plan-actions">
+                    <div class="plan-actions" style="align-items: center;">
+                        ${timeRangeHtml}
                         ${actionButtons}
-                        <!-- 현재 타이머가 진행 중이거나 이미 공부 시간이 0초를 초과하여 기록된 계획은 삭제할 수 없도록 비활성화 처리합니다. -->
-                        <button class="btn-plan-action btn-plan-delete" 
-                                ${isRunningThis || plan.completed_seconds > 0 ? 'disabled title="진행 중이거나 공부 기록이 있는 계획은 삭제할 수 없습니다."' : ''} 
-                                onclick="appState.deletePlan(${plan.id})">삭제</button>
+                        ${deleteButtonHtml}
                     </div>
                 `;
                 plansList.appendChild(li);

@@ -82,9 +82,14 @@ const api = {
         return await this.request('/study/status');
     },
 
-    // 계획 관련 API
-    async getPlans() {
-        return await this.request('/study/plans');
+    // 계획 관련 API (시작일과 종료일을 이용한 필터 기능 추가)
+    async getPlans(startDate, endDate) {
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        const queryString = params.toString();
+        const path = queryString ? `/study/plans?${queryString}` : '/study/plans';
+        return await this.request(path);
     },
 
     async createPlan(subjectId, title, estimatedMinutes) {

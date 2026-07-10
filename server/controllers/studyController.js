@@ -442,16 +442,38 @@ exports.getSubjects = async (req, res) => {
 // 계획 목록 조회
 exports.getPlans = async (req, res) => {
     const user_id = req.user.id;
+    const { startDate, endDate } = req.query; // 클라이언트에서 전달한 날짜 범위 (UTC ISO 스트링)
     try {
-        const plans = await db.query(
-            `SELECT p.*, s.name as subject_name, s.color as subject_color 
-             FROM plans p 
-             JOIN subjects s ON p.subject_id = s.id 
-             WHERE p.user_id = ? 
-             ORDER BY p.created_at DESC`,
-            [user_id]
-        );
-        res.json(plans);
+        let query = `
+            SELECT p.*, s.name as subject_name, s.color as subject_color,
+                   (SELECT MIN(start_time) FROM study_sessions WHERE plan_id = p.id) as started_at,
+                   (SELECT MAX(end_time) FROM study_sessions WHERE plan_id = p.id) as completed_at
+            FROM plans p 
+            JOIN subjects s ON p.subject_id = s.id 
+            WHERE p.user_id = ?
+        `;
+        const params = [user_id];
+
+        // startDate와 endDate가 있는 경우 당일(오늘) 생성된 계획만 필터링합니다.
+        if (startDate && endDate) {
+            query += ` AND p.created_at >= ? AND p.created_at <= ?`;
+            params.push(isoToSQLDateTime(startDate), isoToSQLDateTime(endDate));
+        }
+
+        query += ` ORDER BY p.created_at DESC`;
+
+        const plans = await db.query(query, params);
+
+        // 시간 데이터(DATETIME)를 클라이언트 시간 처리 원칙에 맞게 ISO 8601형식으로 변환합니다.
+        const formattedPlans = plans.map(p => {
+            return {
+                ...p,
+                started_at: p.started_at ? parseUTCDate(p.started_at).toISOString() : null,
+                completed_at: p.completed_at ? parseUTCDate(p.completed_at).toISOString() : null
+            };
+        });
+
+        res.json(formattedPlans);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: '계획 조회 중 오류 발생' });

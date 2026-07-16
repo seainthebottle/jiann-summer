@@ -7,7 +7,7 @@ const appState = {
     async init() {
         if (this.initialized) return;
         this.initialized = true;
-        
+
         console.log(`App Initialized - Version: ${this.version}`);
         this.bindEvents();
         this.initTheme();
@@ -150,7 +150,7 @@ const appState = {
         // 통계 페이지 날짜 및 과목 필터
         const dateSelect = document.getElementById('stats-date-select');
         const subjectSelect = document.getElementById('stats-subject-select');
-        
+
         const saveDateAndLoad = () => {
             localStorage.setItem('saved_stats_date', dateSelect.value);
             // 사용자가 직접 날짜를 변경한 시간을 기록 (5분 유지 로직용)
@@ -177,7 +177,7 @@ const appState = {
             this.updateStudyButtonState();
         });
 
-        // 계획 예상 시간 슬라이더 - 숫자 입력 동기화 (실시간 연동 및 검증)
+        // 계획 목표 시간 슬라이더 - 숫자 입력 동기화 (실시간 연동 및 검증)
         const planSlider = document.getElementById('plan-time-slider');
         const planNumber = document.getElementById('plan-time-number');
         if (planSlider && planNumber) {
@@ -185,12 +185,12 @@ const appState = {
             planSlider.addEventListener('input', () => {
                 planNumber.value = planSlider.value;
             });
-            
+
             // 숫자 입력창에 값을 타이핑할 때 실시간으로 슬라이더에 반영합니다.
             planNumber.addEventListener('input', () => {
                 const rawVal = planNumber.value;
                 if (rawVal === '') return; // 입력값을 지워 빈 칸인 상태에서는 보정 처리를 하지 않아 자연스러운 타이핑을 유도합니다.
-                
+
                 let val = parseInt(rawVal);
                 if (isNaN(val)) return;
 
@@ -199,7 +199,7 @@ const appState = {
                     val = 60;
                     planNumber.value = val;
                 }
-                
+
                 // 1분 미만(예: 0)일 때 즉시 1로 보정해버리면 '15'를 치기 위해 '1'을 입력할 때 방해가 되므로,
                 // 유효 범위(1~60) 내의 정상적인 숫자인 경우에만 슬라이더의 위치를 실시간으로 맞춥니다.
                 if (val >= 1 && val <= 60) {
@@ -245,6 +245,80 @@ const appState = {
                 }
             });
         }
+
+        // 계획 수정 모달 제어
+        const editPlanModal = document.getElementById('edit-plan-modal');
+        const editPlanForm = document.getElementById('edit-plan-form');
+        const editPlanCancelBtn = document.getElementById('edit-plan-cancel-btn');
+        const editPlanSlider = document.getElementById('edit-plan-time-slider');
+        const editPlanNumber = document.getElementById('edit-plan-minutes');
+
+        // 계획 수정 폼의 목표 시간 슬라이더 - 숫자 입력 동기화 (계획 추가 폼과 동일한 방식, 최소/최댓값은 모달을 열 때 동적으로 설정됨)
+        if (editPlanSlider && editPlanNumber) {
+            editPlanSlider.addEventListener('input', () => {
+                editPlanNumber.value = editPlanSlider.value;
+            });
+
+            editPlanNumber.addEventListener('input', () => {
+                const rawVal = editPlanNumber.value;
+                if (rawVal === '') return;
+
+                let val = parseInt(rawVal);
+                if (isNaN(val)) return;
+
+                const max = parseInt(editPlanSlider.max) || 60;
+                if (val > max) {
+                    val = max;
+                    editPlanNumber.value = val;
+                }
+
+                const min = parseInt(editPlanSlider.min) || 1;
+                if (val >= min && val <= max) {
+                    editPlanSlider.value = val;
+                }
+            });
+
+            editPlanNumber.addEventListener('change', () => {
+                const min = parseInt(editPlanSlider.min) || 1;
+                const max = parseInt(editPlanSlider.max) || 60;
+                let val = parseInt(editPlanNumber.value);
+                if (isNaN(val) || val < min) {
+                    val = min;
+                } else if (val > max) {
+                    val = max;
+                }
+                editPlanNumber.value = val;
+                editPlanSlider.value = val;
+            });
+        }
+
+        if (editPlanModal && editPlanForm) {
+            editPlanCancelBtn.onclick = () => {
+                editPlanModal.classList.remove('active');
+            };
+
+            // 바깥 클릭으로는 닫히지 않고, ESC 키를 눌렀을 때만 닫히도록 처리합니다.
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && editPlanModal.classList.contains('active')) {
+                    editPlanModal.classList.remove('active');
+                }
+            });
+
+            editPlanForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const planId = parseInt(document.getElementById('edit-plan-id').value);
+                const title = document.getElementById('edit-plan-title').value;
+                const estimatedMinutes = parseInt(document.getElementById('edit-plan-minutes').value);
+
+                try {
+                    await api.updatePlan(planId, title, estimatedMinutes);
+                    editPlanModal.classList.remove('active');
+                    await this.loadPlans();
+                } catch (err) {
+                    alert(err.message);
+                }
+            });
+        }
     },
 
 
@@ -255,16 +329,16 @@ const appState = {
         if (this.user.role === 'admin') {
             document.getElementById('admin-link').classList.remove('hidden');
         }
-        
+
         // 마지막으로 보던 페이지로 복원 (기본값은 대시보드, auth 페이지인 경우 대시보드로)
         let targetPage = localStorage.getItem('saved_current_page') || 'dashboard';
         if (targetPage === 'auth') targetPage = 'dashboard';
-        
+
         this.showPage(targetPage);
         this.loadSubjects();
         this.loadPlans(); // 계획 목록 로드 추가
         this.checkActiveSession();
-        
+
         window.timer.init();
     },
 
@@ -300,7 +374,7 @@ const appState = {
     showPage(pageId) {
         this.currentPage = pageId;
         localStorage.setItem('saved_current_page', pageId);
-        
+
         // 모든 섹션 숨기기
         document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
         // 대상 섹션 보이기
@@ -330,7 +404,7 @@ const appState = {
 
     startStatsUpdateTimer() {
         this.stopStatsUpdateTimer();
-        
+
         // 1초마다 UI 업데이트 (현재 공부 중인 경우 시간 누적 표시)
         this.statsUpdateTimer = setInterval(() => {
             if (this.currentPage === 'stats') {
@@ -361,10 +435,10 @@ const appState = {
         const subjects = await api.getSubjects();
         const select = document.getElementById('subject-select');
         const statsSelect = document.getElementById('stats-subject-select');
-        
+
         select.innerHTML = '<option value="">과목을 선택하세요</option>';
         statsSelect.innerHTML = '<option value="">모든 과목</option>';
-        
+
         subjects.forEach(sub => {
             const opt = document.createElement('option');
             opt.value = sub.id;
@@ -372,13 +446,13 @@ const appState = {
             // 과목 선택 시 버튼 색상 동적 변경을 위해 옵션 엘리먼트에 색상 정보를 데이터셋으로 주입합니다.
             opt.dataset.color = sub.color || '#339af0';
             select.appendChild(opt);
-            
+
             const statsOpt = document.createElement('option');
             statsOpt.value = sub.id;
             statsOpt.textContent = sub.name;
             statsSelect.appendChild(statsOpt);
         });
-        
+
         // 이전에 선택했던 통계 과목 복원
         const savedStatsSubjectId = localStorage.getItem('saved_stats_subject_id');
         if (savedStatsSubjectId) {
@@ -390,7 +464,7 @@ const appState = {
         if (savedHomeSubjectId) {
             select.value = savedHomeSubjectId;
         }
-        
+
         this.updateHomeSubjectTime();
         this.updateStudyButtonState();
     },
@@ -401,7 +475,7 @@ const appState = {
             // 셀렉트 박스에서 해당 과목 선택 상태로 변경
             document.getElementById('subject-select').value = active.subject_id;
             await this.updateHomeSubjectTime(); // 비동기 대기 추가
-            window.timer.start(active.start_time, active.plan_id); // plan_id 연동 추가
+            window.timer.start(active.start_time, active.plan_id, active.plan_title); // plan_id 및 계획명 연동 추가
         } else {
             await this.updateHomeSubjectTime();
         }
@@ -413,17 +487,17 @@ const appState = {
         const userId = this.user.role === 'admin' ? document.getElementById('admin-user-select').value : null;
         let localDate = document.getElementById('stats-date-select').value;
         const subjectId = document.getElementById('stats-subject-select').value;
-        
+
         // 통계 페이지를 방문하지 않아 날짜 필드가 비어있는 경우 안전 장치를 적용합니다.
         if (!localDate) {
             this.updateStatsDateIfExpired();
             localDate = document.getElementById('stats-date-select').value || this.getTodayDate();
         }
-        
+
         // 로컬 날짜의 시작과 끝을 ISO(UTC) 문자열로 변환
         const startDate = new Date(`${localDate}T00:00:00`).toISOString();
         const endDate = new Date(`${localDate}T23:59:59.999`).toISOString();
-        
+
         const stats = await api.getStats(userId, startDate, endDate, subjectId);
 
         // 실시간 업데이트를 위해 데이터 저장
@@ -474,8 +548,8 @@ const appState = {
             const dateColor = idx === 0
                 ? (isToday ? '#ffa8a8' : '#fa5252')
                 : idx === 6
-                ? (isToday ? '#a5d8ff' : '#4dabf7')
-                : isToday ? 'var(--text-color)' : 'var(--text-secondary)';
+                    ? (isToday ? '#a5d8ff' : '#4dabf7')
+                    : isToday ? 'var(--text-color)' : 'var(--text-secondary)';
 
             const box = document.createElement('div');
             box.style.cssText = `
@@ -539,20 +613,20 @@ const appState = {
 
         const currentDate = new Date(dateInput.value);
         currentDate.setDate(currentDate.getDate() + days);
-        
+
         const todayStr = this.getTodayDate();
         const today = new Date(todayStr);
-        
+
         // 미래 날짜 방지
         if (currentDate > today) return;
-        
+
         const year = currentDate.getFullYear();
         const month = String(currentDate.getMonth() + 1).padStart(2, '0');
         const day = String(currentDate.getDate()).padStart(2, '0');
         const newDateStr = `${year}-${month}-${day}`;
-        
+
         dateInput.value = newDateStr;
-        
+
         // 저장 및 로드 로직 실행 (bindEvents의 change 핸들러와 동일한 동작)
         localStorage.setItem('saved_stats_date', newDateStr);
         localStorage.setItem('last_stats_date_change', Date.now());
@@ -563,10 +637,10 @@ const appState = {
         const dateInput = document.getElementById('stats-date-select');
         const nextBtn = document.getElementById('stats-next-date');
         if (!dateInput || !nextBtn) return;
-        
+
         const selectedDate = dateInput.value;
         const today = this.getTodayDate();
-        
+
         nextBtn.disabled = (selectedDate >= today);
     },
 
@@ -644,7 +718,7 @@ const appState = {
         const users = await api.adminGetUsers();
         const select = document.getElementById('admin-user-select');
         const currentValue = select.value;
-        
+
         select.innerHTML = '';
         users.forEach(u => {
             const opt = document.createElement('option');
@@ -665,7 +739,7 @@ const appState = {
         } else {
             select.value = this.user.id;
         }
-        
+
         this.loadStats(select.value);
     },
 
@@ -824,22 +898,22 @@ const appState = {
         const subjectTodayDisplay = document.getElementById('today-subject-time');
         const subjectCard = document.getElementById('today-subject-card');
         const subjectLabel = document.getElementById('today-subject-label');
-        
+
         try {
             // 1. 오늘 총 공부 시간 로드
             const todayLocal = this.getTodayDate();
             const startUTC = new Date(`${todayLocal}T00:00:00`).toISOString();
             const endUTC = new Date(`${todayLocal}T23:59:59.999`).toISOString();
 
-        const todayStats = await api.getStats(null, startUTC, endUTC, null);
+            const todayStats = await api.getStats(null, startUTC, endUTC, null);
 
             let totalTime = Number(todayStats.dailyTotal) || 0;
-            
+
             // 현재 공부 중인 경우, 서버에서 받아온 '오늘 총합'에는 이미 현재 세션의 시간이 포함되어 있음.
             // timer.js에서 totalTime + diff를 수행하므로, 중복 방지를 위해 diff를 빼서 순수 '이전 세션들의 합'을 구함.
             const isRunning = window.timer && window.timer.isRunning();
             const currentDiff = isRunning ? window.timer.getCurrentDiff() : 0;
-            
+
             const baseTotalTime = totalTime - currentDiff;
             todayDisplay.textContent = this.formatSeconds(baseTotalTime + currentDiff);
             if (window.timer) window.timer.initialTodayTotalTime = baseTotalTime;
@@ -855,12 +929,12 @@ const appState = {
 
             let subjectTime = Number(subjectStats.dailyTotal) || 0;
             const baseSubjectTime = subjectTime - currentDiff;
-            
+
             const subjectName = subjectSelect.options[subjectSelect.selectedIndex].text;
             subjectLabel.textContent = `오늘 ${subjectName} 공부`;
             subjectTodayDisplay.textContent = this.formatSeconds(baseSubjectTime + currentDiff);
             subjectCard.classList.remove('hidden');
-            
+
             // 타이머에서도 사용할 수 있도록 저장
             if (window.timer) window.timer.initialSubjectTodayTime = subjectTime;
         } catch (err) {
@@ -872,7 +946,7 @@ const appState = {
         const select = document.getElementById('subject-select');
         const btn = document.getElementById('study-toggle-btn');
         const planBtn = document.getElementById('add-plan-btn');
-        
+
         // 공부 중일 때는 상태를 변경하지 않음 (timer.js에서 관리)
         if (btn.classList.contains('btn-stop')) return;
 
@@ -883,10 +957,10 @@ const appState = {
 
         if (subjectId) {
             btn.disabled = false;
-            btn.textContent = `${subjectName} 공부 시작`;
+            btn.textContent = `${subjectName} 시작`;
             // 선택된 과목의 고유 색상을 버튼의 CSS 변수(--subject-color)로 주입합니다.
             btn.style.setProperty('--subject-color', subjectColor);
-            
+
             if (planBtn) {
                 planBtn.disabled = false;
                 planBtn.textContent = `"${subjectName}" 과목으로 계획 추가`;
@@ -898,7 +972,7 @@ const appState = {
             btn.textContent = '과목을 선택하세요';
             // 선택 해제 시 적용했던 CSS 변수를 삭제하여 기본 테마 스타일로 복구시킵니다.
             btn.style.removeProperty('--subject-color');
-            
+
             if (planBtn) {
                 planBtn.disabled = true;
                 planBtn.textContent = '과목을 선택해주세요';
@@ -921,6 +995,7 @@ const appState = {
             const endDate = new Date(`${todayLocal}T23:59:59.999`).toISOString();
 
             const plans = await api.getPlans(startDate, endDate);
+            this.plansCache = plans; // 계획 수정 모달에서 참조할 수 있도록 캐싱
             plansList.innerHTML = '';
 
             if (!plans || plans.length === 0) {
@@ -936,7 +1011,7 @@ const appState = {
             plans.forEach(plan => {
                 const li = document.createElement('li');
                 const isRunningThis = isRunning && currentActivePlanId === plan.id;
-                
+
                 li.className = `plan-card status-${plan.status}${isRunningThis ? ' running' : ''}`;
                 li.id = `plan-card-${plan.id}`;
                 li.dataset.completedSeconds = plan.completed_seconds;
@@ -946,7 +1021,7 @@ const appState = {
                 // 진행 상황 계산 (남은 시간 및 초과 시간 위주의 프로그레스 바 연산)
                 const estSec = plan.estimated_minutes * 60;
                 const curSec = plan.completed_seconds;
-                
+
                 let progressPercent = 0;
                 let progressBarColor = plan.subject_color || '#339af0';
 
@@ -987,10 +1062,16 @@ const appState = {
                     }
                 }
 
+                // 수정 버튼은 계획이 현재 진행 중이지 않은 경우(정지/완료 상태)에만 렌더링합니다.
+                const isEditable = !isRunningThis && plan.status !== 'in_progress';
+                const editButtonHtml = isEditable
+                    ? `<button class="btn-plan-action btn-plan-edit" onclick="appState.openEditPlanModal(${plan.id})">수정</button>`
+                    : '';
+
                 // 삭제 버튼은 삭제가 가능한 경우(현재 공부 중이지 않고 공부 기록이 0초인 경우)에만 렌더링합니다.
                 const isDeletable = !isRunningThis && plan.completed_seconds === 0;
-                const deleteButtonHtml = isDeletable 
-                    ? `<button class="btn-plan-action btn-plan-delete" onclick="appState.deletePlan(${plan.id})">삭제</button>` 
+                const deleteButtonHtml = isDeletable
+                    ? `<button class="btn-plan-action btn-plan-delete" onclick="appState.deletePlan(${plan.id})">삭제</button>`
                     : '';
 
                 // 시작 시각 및 완료 시각 포맷팅 (로컬 시간 기준)
@@ -1043,6 +1124,7 @@ const appState = {
                     <div class="plan-actions" style="align-items: center;">
                         ${timeRangeHtml}
                         ${actionButtons}
+                        ${editButtonHtml}
                         ${deleteButtonHtml}
                     </div>
                 `;
@@ -1080,7 +1162,8 @@ const appState = {
             await api.startSession(subjectId, planId);
             document.getElementById('subject-select').value = subjectId;
             await this.updateHomeSubjectTime();
-            window.timer.start(new Date(), planId);
+            const plan = (this.plansCache || []).find(p => p.id === planId);
+            window.timer.start(new Date(), planId, plan ? plan.title : '');
             await this.loadPlans();
         } catch (err) {
             alert(err.message);
@@ -1117,6 +1200,38 @@ const appState = {
         } catch (err) {
             alert(err.message);
         }
+    },
+
+    // 계획 수정 모달 열기 (캐싱된 계획 데이터를 이용해 폼을 채웁니다)
+    openEditPlanModal(planId) {
+        const plan = (this.plansCache || []).find(p => p.id === planId);
+        if (!plan) return;
+
+        const modal = document.getElementById('edit-plan-modal');
+        const idInput = document.getElementById('edit-plan-id');
+        const titleInput = document.getElementById('edit-plan-title');
+        const minutesInput = document.getElementById('edit-plan-minutes');
+        const minutesSlider = document.getElementById('edit-plan-time-slider');
+        const minutesHint = document.getElementById('edit-plan-minutes-hint');
+        if (!modal || !idInput || !titleInput || !minutesInput || !minutesSlider) return;
+
+        // 지금까지 진행된 시간(분 단위 올림)보다 짧게는 목표 시간을 설정할 수 없습니다.
+        const minMinutes = Math.max(1, Math.ceil(plan.completed_seconds / 60));
+        // 슬라이더 최댓값은 계획 추가 폼과 동일하게 60분을 기본으로 하되, 이미 그보다 크게 설정된 계획도 다룰 수 있도록 확장합니다.
+        const maxMinutes = Math.max(60, plan.estimated_minutes, minMinutes);
+
+        idInput.value = plan.id;
+        titleInput.value = plan.title;
+        minutesInput.value = plan.estimated_minutes;
+        minutesInput.min = minMinutes;
+        minutesSlider.min = minMinutes;
+        minutesSlider.max = maxMinutes;
+        minutesSlider.value = plan.estimated_minutes;
+        minutesHint.textContent = plan.completed_seconds > 0
+            ? `이미 ${this.formatMinutesSeconds(plan.completed_seconds)} 진행되어 ${minMinutes}분보다 짧게 설정할 수 없습니다.`
+            : '';
+
+        modal.classList.add('active');
     },
 
     // 계획 삭제

@@ -103,6 +103,17 @@ const api = {
         });
     },
 
+    // 계획 수정 API (진행 중이 아닐 때만 목표 시간과 계획 내용 수정 가능)
+    async updatePlan(planId, title, estimatedMinutes) {
+        return await this.request(`/study/plans/${planId}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                title,
+                estimated_minutes: estimatedMinutes
+            })
+        });
+    },
+
     async donePlan(planId) {
         return await this.request(`/study/plans/${planId}/done`, {
             method: 'POST'

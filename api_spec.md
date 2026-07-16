@@ -337,8 +337,8 @@ Authorization: Bearer <JWT_Token>
 
 ---
 
-### 3.6 공부 계획 리스트 조회 (Get Plans)
-현재 로그인한 사용자의 오늘의 공부 계획 목록을 과목 정보와 함께 조회합니다.
+### 3.6 계획 리스트 조회 (Get Plans)
+현재 로그인한 사용자의 오늘의 계획 목록을 과목 정보와 함께 조회합니다.
 
 - **HTTP Method**: `GET`
 - **Path**: `/study/plans`
@@ -368,8 +368,8 @@ Authorization: Bearer <JWT_Token>
 
 ---
 
-### 3.7 공부 계획 생성 (Create Plan)
-새로운 오늘의 공부 계획을 현재 활성화된 특정 과목에 종속하여 생성합니다.
+### 3.7 계획 생성 (Create Plan)
+새로운 오늘의 계획을 현재 활성화된 특정 과목에 종속하여 생성합니다.
 
 - **HTTP Method**: `POST`
 - **Path**: `/study/plans`
@@ -389,7 +389,7 @@ Authorization: Bearer <JWT_Token>
 - **Error Response (400 Bad Request - 필수 필드 누락)**:
   ```json
   {
-    "error": "과목, 계획 내용, 예상 시간은 필수입니다."
+    "error": "과목, 계획 내용, 목표 시간은 필수입니다."
   }
   ```
 - **Error Response (500 Internal Server Error)**:
@@ -401,8 +401,8 @@ Authorization: Bearer <JWT_Token>
 
 ---
 
-### 3.8 공부 계획 완료 처리 (Done Plan)
-지정한 공부 계획을 강제로 '완료(done)' 상태로 변경합니다.
+### 3.8 계획 완료 처리 (Done Plan)
+지정한 계획을 강제로 '완료(done)' 상태로 변경합니다.
 
 - **HTTP Method**: `POST`
 - **Path**: `/study/plans/:id/done`
@@ -423,8 +423,8 @@ Authorization: Bearer <JWT_Token>
 
 ---
 
-### 3.9 공부 계획 삭제 (Delete Plan)
-지정한 공부 계획을 영구 삭제합니다.
+### 3.9 계획 삭제 (Delete Plan)
+지정한 계획을 영구 삭제합니다.
 
 - **HTTP Method**: `DELETE`
 - **Path**: `/study/plans/:id`

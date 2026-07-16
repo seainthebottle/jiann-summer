@@ -30,23 +30,26 @@ const timer = {
             try {
                 await api.stopSession();
                 this.stop();
-                // 종료 후 통계 업데이트를 위해 앱 상태 새로고침 유도 가능
-                if (window.appState) window.appState.loadStats();
+                // 종료 후 통계 및 계획 카드(버튼/상태 표시)를 최신 상태로 새로고침합니다.
+                if (window.appState) {
+                    window.appState.loadStats();
+                    window.appState.loadPlans();
+                }
             } catch (err) {
                 alert(err.message);
             }
         }
     },
 
-    start(time, planId = null) {
+    start(time, planId = null, planTitle = '') {
         startTime = new Date(time);
         this.activePlanId = planId;
         const subjectName = this.subjectSelect.options[this.subjectSelect.selectedIndex]?.text || '';
-        
+
         if (this.activePlanId) {
-            this.toggleBtn.textContent = `계획 공부 종료`;
+            this.toggleBtn.textContent = `${planTitle || subjectName} 종료`;
         } else {
-            this.toggleBtn.textContent = `${subjectName} 공부 종료`;
+            this.toggleBtn.textContent = `${subjectName} 종료`;
         }
         this.toggleBtn.classList.replace('btn-start', 'btn-stop');
         this.subjectSelect.disabled = true;

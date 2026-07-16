@@ -34,7 +34,8 @@
                             <line x1="6" y1="20" x2="6" y2="14"></line>
                         </svg>
                     </a>
-                    <a href="#" data-page="subjects" id="subjects-link" class="hidden" title="과목 관리" style="display: flex; align-items: center;">
+                    <a href="#" data-page="subjects" id="subjects-link" class="hidden" title="과목 관리"
+                        style="display: flex; align-items: center;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
@@ -121,7 +122,7 @@
                     <button id="study-toggle-btn" class="btn-start" disabled>과목을 선택하세요</button>
                 </div>
 
-                <!-- 등록된 공부 계획 목록 (공부 계획 박스 바깥 상단에 위치) -->
+                <!-- 등록된 계획 목록 (계획 박스 바깥 상단에 위치) -->
                 <div id="plans-list-container" class="plans-list-container">
                     <div id="plans-empty-msg" class="plans-empty-msg">등록된 계획이 없습니다.</div>
                     <ul id="plans-list" class="plans-list">
@@ -129,10 +130,10 @@
                     </ul>
                 </div>
 
-                <!-- 공부 계획 섹션 -->
+                <!-- 계획 섹션 -->
                 <div class="plans-section">
-                    <h3>오늘의 공부 계획</h3>
-                    
+                    <h3>오늘의 계획</h3>
+
                     <form id="add-plan-form" class="add-plan-form">
                         <div class="form-group">
                             <label for="plan-title">계획 내용</label>
@@ -140,7 +141,7 @@
                         </div>
                         <div class="plan-time-container">
                             <div class="form-group plan-slider-group">
-                                <label for="plan-time-slider">예상 시간 (분)</label>
+                                <label for="plan-time-slider">목표 시간 (분)</label>
                                 <div class="slider-wrapper">
                                     <input type="range" id="plan-time-slider" min="1" max="60" step="1" value="30">
                                 </div>
@@ -150,7 +151,8 @@
                                 <input type="number" id="plan-time-number" min="1" max="60" step="1" value="30">
                             </div>
                         </div>
-                        <button type="submit" id="add-plan-btn" class="btn-secondary" style="width: 100%;" disabled>과목을 선택해주세요</button>
+                        <button type="submit" id="add-plan-btn" class="btn-secondary" style="width: 100%;" disabled>과목을
+                            선택해주세요</button>
                     </form>
                 </div>
             </section>
@@ -197,7 +199,9 @@
                 <div class="stats-grid">
                     <div class="stats-card">
                         <h3>선택일 시간별 공부 분포</h3>
-                        <div id="weekday-indicator" style="display: flex; gap: 4px; justify-content: center; margin-bottom: 12px; margin-top: 24px;"></div>
+                        <div id="weekday-indicator"
+                            style="display: flex; gap: 4px; justify-content: center; margin-bottom: 12px; margin-top: 24px;">
+                        </div>
                         <div class="chart-container">
                             <canvas id="daily-pie-chart"></canvas>
                         </div>
@@ -274,7 +278,8 @@
                             <select id="admin-subject-user-select"></select>
                         </div>
                         <form id="admin-add-subject-form">
-                            <div style="display: flex; gap: 10px; width: 100%; align-items: center; margin-bottom: 15px;">
+                            <div
+                                style="display: flex; gap: 10px; width: 100%; align-items: center; margin-bottom: 15px;">
                                 <input type="color" id="admin-new-subject-color" value="#339af0"
                                     style="padding: 0; width: 40px; height: 38px;">
                                 <input type="text" id="admin-new-subject-name" placeholder="새 과목 이름" required
@@ -298,6 +303,38 @@
                 <button id="modal-cancel-btn" class="btn-cancel">취소</button>
                 <button id="modal-confirm-btn" class="btn-confirm">로그아웃</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 계획 수정 모달 -->
+    <div id="edit-plan-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>계획 수정</h3>
+            <form id="edit-plan-form" class="add-plan-form" style="text-align: left;">
+                <input type="hidden" id="edit-plan-id">
+                <div class="form-group">
+                    <label for="edit-plan-title">계획 내용</label>
+                    <input type="text" id="edit-plan-title" required>
+                </div>
+                <div class="plan-time-container">
+                    <div class="form-group plan-slider-group">
+                        <label for="edit-plan-time-slider">목표 시간 (분)</label>
+                        <div class="slider-wrapper">
+                            <input type="range" id="edit-plan-time-slider" min="1" max="60" step="1" value="30">
+                        </div>
+                    </div>
+                    <div class="form-group plan-number-group">
+                        <label for="edit-plan-minutes">시간 (분)</label>
+                        <input type="number" id="edit-plan-minutes" min="1" step="1" value="30">
+                    </div>
+                </div>
+                <small id="edit-plan-minutes-hint"
+                    style="display: block; color: var(--text-secondary); margin-top: -8px;"></small>
+                <div class="modal-actions">
+                    <button type="button" id="edit-plan-cancel-btn" class="btn-cancel">취소</button>
+                    <button type="submit" class="btn-plan-save">저장</button>
+                </div>
+            </form>
         </div>
     </div>
 

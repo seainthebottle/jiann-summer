@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS study_sessions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 공부 계획 테이블
+-- 계획 테이블
 CREATE TABLE IF NOT EXISTS plans (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,

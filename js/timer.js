@@ -38,9 +38,11 @@ const timer = {
         }
     },
 
-    start(time, planId = null) {
+    start(time, planId = null, subjectId = null) {
         startTime = new Date(time);
         this.activePlanId = planId;
+        // 현재 공부 진행 중인 과목 ID를 저장합니다.
+        this.activeSubjectId = subjectId || (this.subjectSelect ? this.subjectSelect.value : null);
         const subjectName = this.subjectSelect.options[this.subjectSelect.selectedIndex]?.text || '';
         
         if (this.activePlanId) {
@@ -59,6 +61,7 @@ const timer = {
     stop() {
         clearInterval(timerInterval);
         this.activePlanId = null;
+        this.activeSubjectId = null;
         this.toggleBtn.classList.replace('btn-stop', 'btn-start');
         this.subjectSelect.disabled = false;
         this.display.textContent = '00:00:00';
@@ -161,8 +164,11 @@ const timer = {
         }
 
         // 2. 오늘 과목 공부 시간 실시간 업데이트
+        // 선택된 과목과 현재 공부 중인 과목이 일치할 때만 실시간 diff 가산 적용
         if (this.initialSubjectTodayTime !== undefined) {
-            const total = this.initialSubjectTodayTime + diff;
+            const currentSelectedSubjectId = this.subjectSelect ? this.subjectSelect.value : null;
+            const isMatchingSubject = this.isRunning() && String(currentSelectedSubjectId) === String(this.activeSubjectId);
+            const total = this.initialSubjectTodayTime + (isMatchingSubject ? diff : 0);
             const subjectTodayDisplay = document.getElementById('today-subject-time');
             if (subjectTodayDisplay) {
                 subjectTodayDisplay.textContent = window.appState.formatSeconds(total);

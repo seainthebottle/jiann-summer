@@ -400,8 +400,8 @@ const appState = {
         if (active) {
             // 셀렉트 박스에서 해당 과목 선택 상태로 변경
             document.getElementById('subject-select').value = active.subject_id;
-            await this.updateHomeSubjectTime(); // 비동기 대기 추가
-            window.timer.start(active.start_time, active.plan_id); // plan_id 연동 추가
+            window.timer.start(active.start_time, active.plan_id, active.subject_id); // activeSubjectId 연동
+            await this.updateHomeSubjectTime();
         } else {
             await this.updateHomeSubjectTime();
         }
@@ -831,7 +831,7 @@ const appState = {
             const startUTC = new Date(`${todayLocal}T00:00:00`).toISOString();
             const endUTC = new Date(`${todayLocal}T23:59:59.999`).toISOString();
 
-        const todayStats = await api.getStats(null, startUTC, endUTC, null);
+            const todayStats = await api.getStats(null, startUTC, endUTC, null);
 
             let totalTime = Number(todayStats.dailyTotal) || 0;
             
@@ -840,7 +840,7 @@ const appState = {
             const isRunning = window.timer && window.timer.isRunning();
             const currentDiff = isRunning ? window.timer.getCurrentDiff() : 0;
             
-            const baseTotalTime = totalTime - currentDiff;
+            const baseTotalTime = Math.max(0, totalTime - currentDiff);
             todayDisplay.textContent = this.formatSeconds(baseTotalTime + currentDiff);
             if (window.timer) window.timer.initialTodayTotalTime = baseTotalTime;
 
@@ -854,15 +854,19 @@ const appState = {
             const subjectStats = await api.getStats(null, startUTC, endUTC, subjectId);
 
             let subjectTime = Number(subjectStats.dailyTotal) || 0;
-            const baseSubjectTime = subjectTime - currentDiff;
+            
+            // 선택된 과목(subjectId)이 현재 실행 중인 세션의 과목(activeSubjectId)과 동일한 경우에만 currentDiff 차감 적용
+            const activeSubjectId = window.timer ? window.timer.activeSubjectId : null;
+            const isMatchingSubject = isRunning && String(subjectId) === String(activeSubjectId);
+            const baseSubjectTime = isMatchingSubject ? Math.max(0, subjectTime - currentDiff) : subjectTime;
             
             const subjectName = subjectSelect.options[subjectSelect.selectedIndex].text;
             subjectLabel.textContent = `오늘 ${subjectName} 공부`;
-            subjectTodayDisplay.textContent = this.formatSeconds(baseSubjectTime + currentDiff);
+            subjectTodayDisplay.textContent = this.formatSeconds(baseSubjectTime + (isMatchingSubject ? currentDiff : 0));
             subjectCard.classList.remove('hidden');
             
-            // 타이머에서도 사용할 수 있도록 저장
-            if (window.timer) window.timer.initialSubjectTodayTime = subjectTime;
+            // 타이머 실시간 업데이트 기준 시간으로 차감된 baseSubjectTime 저장
+            if (window.timer) window.timer.initialSubjectTodayTime = baseSubjectTime;
         } catch (err) {
             console.error('시간 로드 실패:', err);
         }
@@ -1079,8 +1083,8 @@ const appState = {
         try {
             await api.startSession(subjectId, planId);
             document.getElementById('subject-select').value = subjectId;
+            window.timer.start(new Date(), planId, subjectId);
             await this.updateHomeSubjectTime();
-            window.timer.start(new Date(), planId);
             await this.loadPlans();
         } catch (err) {
             alert(err.message);

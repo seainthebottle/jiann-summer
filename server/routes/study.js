@@ -17,6 +17,7 @@ router.delete('/subjects/:id', studyController.deleteSubject);
 // 계획 관련 API
 router.get('/plans', studyController.getPlans);
 router.post('/plans', studyController.createPlan);
+router.put('/plans/:id', studyController.updatePlan);
 router.post('/plans/:id/done', studyController.donePlan);
 router.post('/plans/:id/undone', studyController.undonePlan); // 계획 완료 취소 라우터
 router.delete('/plans/:id', studyController.deletePlan);

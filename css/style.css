@@ -395,7 +395,8 @@ select:focus {
     }
 
     .logo {
-        font-size: 1.2rem; /* 모바일에서 로고 크기도 살짝 줄임 */
+        font-size: 1.2rem;
+        /* 모바일에서 로고 크기도 살짝 줄임 */
     }
 
     #timer-display {
@@ -494,7 +495,7 @@ select:focus {
     filter: brightness(0.9);
 }
 
-/* 공부 계획 섹션 스타일 */
+/* 계획 섹션 스타일 */
 .plans-section {
     max-width: 500px;
     margin: 20px auto 20px;
@@ -574,7 +575,8 @@ select:focus {
     background-color: color-mix(in srgb, var(--subject-color, var(--primary-color)) 12%, var(--card-bg));
     color: var(--subject-color, var(--primary-color));
     border: 1.5px solid color-mix(in srgb, var(--subject-color, var(--primary-color)) 30%, var(--card-bg));
-    padding: 12.5px; /* 보더가 추가되었으므로 레이아웃 높이 유지를 위해 패딩을 약간 보정합니다. */
+    padding: 12.5px;
+    /* 보더가 추가되었으므로 레이아웃 높이 유지를 위해 패딩을 약간 보정합니다. */
     border-radius: 8px;
     font-size: 0.95rem;
     font-weight: 600;
@@ -701,15 +703,18 @@ select:focus {
     border-radius: 6px;
     width: 100%;
     position: relative;
-    overflow: hidden; /* 라운드 보더 영역 바깥으로 진행률 바가 삐져나가지 않도록 숨김 처리합니다. */
+    overflow: hidden;
+    /* 라운드 보더 영역 바깥으로 진행률 바가 삐져나가지 않도록 숨김 처리합니다. */
     display: flex;
-    justify-content: flex-end; /* 우측 정렬: 왼쪽에서부터 서서히 비워져 우측 끝으로 짧아지도록 만듭니다. */
+    justify-content: flex-end;
+    /* 우측 정렬: 왼쪽에서부터 서서히 비워져 우측 끝으로 짧아지도록 만듭니다. */
 }
 
 .plan-progress-bar {
     height: 100%;
     border-radius: 6px;
-    transition: width 0.1s linear; /* 부드러운 실시간 증가 */
+    transition: width 0.1s linear;
+    /* 부드러운 실시간 증가 */
 }
 
 /* 목표 지점 마커 */
@@ -718,7 +723,8 @@ select:focus {
     top: -4px;
     height: 20px;
     width: 3px;
-    background-color: #f03e3e; /* 목표 표시 세로선 */
+    background-color: #f03e3e;
+    /* 목표 표시 세로선 */
     box-shadow: 0 0 4px rgba(240, 62, 62, 0.6);
     z-index: 2;
     transform: translateX(-50%);
@@ -807,13 +813,42 @@ select:focus {
     color: white;
 }
 
+/* 계획 수정 버튼 스타일 */
+.btn-plan-edit {
+    background-color: transparent;
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+}
+
+.btn-plan-edit:hover {
+    background-color: rgba(77, 171, 247, 0.1);
+}
+
+/* 계획 수정 모달 저장 버튼 */
+.btn-plan-save {
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: var(--transition);
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-plan-save:hover {
+    filter: brightness(0.9);
+}
+
 @keyframes pulse {
     0% {
         box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4);
     }
+
     70% {
         box-shadow: 0 0 0 8px rgba(255, 107, 107, 0);
     }
+
     100% {
         box-shadow: 0 0 0 0 rgba(255, 107, 107, 0);
     }

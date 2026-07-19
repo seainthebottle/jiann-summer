@@ -79,7 +79,7 @@ exports.stopSession = async (req, res) => {
         }
 
         const session = active[0];
-        
+
         // 진행 시간 계산 (초)
         const diffCheck = await db.query("SELECT TIMESTAMPDIFF(SECOND, start_time, UTC_TIMESTAMP()) as diff FROM study_sessions WHERE id = ?", [session.id]);
         const diffSeconds = diffCheck[0].diff;
@@ -87,7 +87,7 @@ exports.stopSession = async (req, res) => {
         if (diffSeconds <= 60) {
             // 1분 이하인 경우 세션 삭제
             await db.query("DELETE FROM study_sessions WHERE id = ?", [session.id]);
-            
+
             // 계획이 연결되어 있었다면 상태 복원 검토
             if (session.plan_id) {
                 const planRes = await db.query("SELECT * FROM plans WHERE id = ?", [session.plan_id]);
@@ -118,7 +118,7 @@ exports.stopSession = async (req, res) => {
                 [diffSeconds, session.plan_id, user_id]
             );
 
-            // 누적 시간이 예상 시간보다 크거나 같은지 확인하여 상태 업데이트
+            // 누적 시간이 목표 시간보다 크거나 같은지 확인하여 상태 업데이트
             const planRes = await db.query("SELECT * FROM plans WHERE id = ?", [session.plan_id]);
             if (planRes.length > 0) {
                 const plan = planRes[0];
@@ -140,9 +140,10 @@ exports.getStatus = async (req, res) => {
     const user_id = req.user.id;
     try {
         const active = await db.query(
-            `SELECT s.*, sub.name as subject_name 
-             FROM study_sessions s 
-             JOIN subjects sub ON s.subject_id = sub.id 
+            `SELECT s.*, sub.name as subject_name, p.title as plan_title
+             FROM study_sessions s
+             JOIN subjects sub ON s.subject_id = sub.id
+             LEFT JOIN plans p ON s.plan_id = p.id
              WHERE s.user_id = ? AND s.end_time IS NULL`,
             [user_id]
         );
@@ -181,7 +182,7 @@ exports.getStats = async (req, res) => {
     try {
         const rangeStart = startDate;
         const rangeEnd = endDate;
-        
+
         console.log(`[Stats Debug] UTC Range: '${rangeStart}' ~ '${rangeEnd}', SubjectId: ${subjectId || 'All'}`);
 
 
@@ -209,13 +210,13 @@ exports.getStats = async (req, res) => {
             sessionsQuery += ` AND s.subject_id = ?`;
             sessionsParams.push(subjectId);
         }
-        
+
         const rawSessions = await db.query(sessionsQuery, sessionsParams);
         console.log(`[Stats Debug] rawSessions found: ${rawSessions.length}`);
-        
+
         let dayStart = new Date(rangeStart);
         let dayEnd = new Date(rangeEnd);
-        
+
         let manualDailyTotal = 0;
         const sessions = [];
         rawSessions.forEach((session, idx) => {
@@ -226,12 +227,12 @@ exports.getStats = async (req, res) => {
             if (start < dayStart) start = dayStart;
             if (end > dayEnd) end = dayEnd;
             if (start >= end) return;
-            
+
             const duration = Math.floor((end - start) / 1000);
             manualDailyTotal += duration;
 
             console.log(`[Stats Debug] Session ${idx}: ${session.subject_name}, Start: ${start.toISOString()}, End: ${end.toISOString()}, Duration: ${duration}s, Active: ${session.is_active}, PlanTitle: ${session.plan_title}`);
-            
+
             sessions.push({
                 subject_name: session.subject_name,
                 color: session.color || '#339af0',
@@ -279,7 +280,7 @@ exports.getStats = async (req, res) => {
 
         // SQL 결과가 0인데 JS 계산 결과가 있다면 JS 결과를 우선 사용 (보험용)
         const finalDailyTotal = (sqlDailyTotal === 0 && manualDailyTotal > 0) ? manualDailyTotal : sqlDailyTotal;
-        
+
         // 주간 합계 (최근 7일)
         // 클라이언트에서 넘겨준 rangeStart(기준일 00:00 UTC)를 기준으로 6일 전 계산
         const weeklyStartDate = new Date(new Date(rangeStart).getTime() - 6 * 86400000);
@@ -484,11 +485,11 @@ exports.getPlans = async (req, res) => {
 exports.createPlan = async (req, res) => {
     const user_id = req.user.id;
     const { subject_id, title, estimated_minutes } = req.body;
-    
+
     if (!subject_id || !title || !estimated_minutes) {
-        return res.status(400).json({ error: '과목, 계획 내용, 예상 시간은 필수입니다.' });
+        return res.status(400).json({ error: '과목, 계획 내용, 목표 시간은 필수입니다.' });
     }
-    
+
     try {
         await db.query(
             `INSERT INTO plans (user_id, subject_id, title, estimated_minutes, completed_seconds, status) 
@@ -499,6 +500,52 @@ exports.createPlan = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: '계획 생성 중 오류 발생' });
+    }
+};
+
+// 계획 수정 (진행 중이 아닐 때만 목표 시간과 계획 내용 수정 가능)
+exports.updatePlan = async (req, res) => {
+    const user_id = req.user.id;
+    const { id } = req.params;
+    const { title, estimated_minutes } = req.body;
+
+    if (!title || !title.trim() || !estimated_minutes || estimated_minutes <= 0) {
+        return res.status(400).json({ error: '계획 내용과 목표 시간을 올바르게 입력하세요.' });
+    }
+
+    try {
+        const planResult = await db.query(
+            "SELECT status, completed_seconds FROM plans WHERE id = ? AND user_id = ?",
+            [id, user_id]
+        );
+        if (planResult.length === 0) {
+            return res.status(404).json({ error: '계획을 찾을 수 없습니다.' });
+        }
+
+        const plan = planResult[0];
+
+        // 현재 진행 중인 계획은 수정할 수 없습니다.
+        if (plan.status === 'in_progress') {
+            return res.status(400).json({ error: '진행 중인 계획은 수정할 수 없습니다.' });
+        }
+
+        // 목표 시간은 지금까지 진행된 시간(completed_seconds)보다 짧게 설정할 수 없습니다.
+        const minMinutes = Math.ceil(plan.completed_seconds / 60);
+        if (estimated_minutes < minMinutes) {
+            return res.status(400).json({ error: `목표 시간은 지금까지 진행된 시간(${minMinutes}분)보다 짧게 설정할 수 없습니다.` });
+        }
+
+        // 진행된 시간 대비 새 목표 시간에 맞춰 상태를 재계산합니다.
+        const nextStatus = plan.completed_seconds >= estimated_minutes * 60 ? 'done' : 'todo';
+
+        await db.query(
+            `UPDATE plans SET title = ?, estimated_minutes = ?, status = ? WHERE id = ? AND user_id = ?`,
+            [title.trim(), estimated_minutes, nextStatus, id, user_id]
+        );
+        res.json({ message: '계획이 수정되었습니다.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: '계획 수정 중 오류 발생' });
     }
 };
 
@@ -570,7 +617,7 @@ exports.undonePlan = async (req, res) => {
         if (planRes.length === 0) {
             return res.status(404).json({ error: '계획을 찾을 수 없습니다.' });
         }
-        
+
         const completedSeconds = planRes[0].completed_seconds;
         const nextStatus = completedSeconds > 0 ? 'in_progress' : 'todo';
 

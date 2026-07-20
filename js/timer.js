@@ -44,15 +44,27 @@ const timer = {
     start(time, planId = null, subjectId = null, planTitle = '') {
         startTime = new Date(time);
         this.activePlanId = planId;
+        
+        // 전달된 subjectId가 있으면 셀렉트 박스 선택값을 업데이트합니다.
+        if (subjectId && this.subjectSelect) {
+            this.subjectSelect.value = subjectId;
+        }
         // 현재 공부 진행 중인 과목 ID를 저장합니다.
         this.activeSubjectId = subjectId || (this.subjectSelect ? this.subjectSelect.value : null);
-        const subjectName = this.subjectSelect.options[this.subjectSelect.selectedIndex]?.text || '';
+        const subjectName = (this.subjectSelect && this.subjectSelect.options[this.subjectSelect.selectedIndex]) 
+            ? this.subjectSelect.options[this.subjectSelect.selectedIndex].text 
+            : '';
 
         if (this.activePlanId) {
-            this.toggleBtn.textContent = `${planTitle || subjectName} 종료`;
+            // 계획 공부 실행 중일 때는 `'계획명' 중지` 형식으로 버튼 텍스트를 설정합니다.
+            const displayPlanTitle = planTitle || subjectName;
+            this.toggleBtn.textContent = `'${displayPlanTitle}' 중지`;
         } else {
+            // 일반 과목 공부 실행 중일 때는 `${subjectName} 종료` 형식으로 설정합니다.
             this.toggleBtn.textContent = `${subjectName} 종료`;
         }
+        // 버튼이 활성화되어 중지 동작이 가능하도록 disabled 상태를 해제합니다.
+        this.toggleBtn.disabled = false;
         this.toggleBtn.classList.replace('btn-start', 'btn-stop');
         this.subjectSelect.disabled = true;
 

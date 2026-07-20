@@ -1043,10 +1043,10 @@ const appState = {
                     remainingHtml = `<div class="time-remaining-wrapper status-over"><span class="time-remaining">${this.formatMinutesSeconds(curSec - estSec)} 초과</span></div>`;
                 }
 
-                // 버튼 구성
+                // 버튼 구성: 현재 진행 중인 계획 카드에는 '계획 중지' 버튼을 노출합니다.
                 let actionButtons = '';
                 if (isRunningThis) {
-                    actionButtons = `<button class="btn-plan-action btn-plan-stop" onclick="appState.stopPlan()">정지</button>`;
+                    actionButtons = `<button class="btn-plan-action btn-plan-stop" onclick="appState.stopPlan()">계획 중지</button>`;
                 } else {
                     if (plan.status === 'done') {
                         // 완료된 계획은 '완료됨' 표시와 함께 완료 취소 버튼을 노출합니다.

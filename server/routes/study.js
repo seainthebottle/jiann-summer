@@ -6,6 +6,8 @@ const authMiddleware = require('../middleware/authMiddleware');
 router.use(authMiddleware); // 모든 공부 관련 API는 인증 필요
 
 router.post('/start', studyController.startSession);
+router.post('/pause', studyController.pauseSession);
+router.post('/resume', studyController.resumeSession);
 router.post('/stop', studyController.stopSession);
 router.get('/status', studyController.getStatus);
 router.get('/stats', studyController.getStats);
@@ -23,4 +25,3 @@ router.post('/plans/:id/undone', studyController.undonePlan); // 계획 완료 �
 router.delete('/plans/:id', studyController.deletePlan);
 
 module.exports = router;
-

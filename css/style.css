@@ -165,7 +165,8 @@ select:focus {
 /* 버튼 */
 .btn-primary,
 .btn-start,
-.btn-stop {
+.btn-stop,
+.btn-pause {
     width: 100%;
     padding: 14px;
     border: none;
@@ -174,6 +175,29 @@ select:focus {
     font-weight: 600;
     cursor: pointer;
     transition: var(--transition);
+}
+
+.timer-action-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.timer-action-buttons > button {
+    flex: 1;
+}
+
+.timer-action-buttons > .btn-start:only-child,
+.timer-action-buttons > .btn-start:first-child:last-child {
+    width: 100%;
+}
+
+.btn-pause {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.btn-pause.is-resume {
+    background-color: var(--success-color);
 }
 
 .btn-primary {
@@ -771,6 +795,11 @@ select:focus {
     background-color: var(--danger-color);
     color: white;
     animation: pulse 1.5s infinite;
+}
+
+.btn-plan-pause {
+    background-color: var(--secondary-color);
+    color: white;
 }
 
 .btn-plan-done {

@@ -133,6 +133,21 @@ async function runMigrations() {
         `);
         console.log('[Migration] plans 테이블 정상 존재 여부 검사 완료.');
 
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS study_session_groups (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                subject_id INT NOT NULL,
+                plan_id INT DEFAULT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'running',
+                started_at DATETIME NOT NULL,
+                ended_at DATETIME,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_session_groups_user_status (user_id, status)
+            )
+        `);
+        console.log('[Migration] study_session_groups 테이블 정상 존재 여부 검사 완료.');
+
         // 2. study_sessions 테이블에 plan_id 컬럼 추가 시도
         try {
             await db.query("ALTER TABLE study_sessions ADD COLUMN plan_id INT DEFAULT NULL");
@@ -144,6 +159,13 @@ async function runMigrations() {
             } else {
                 throw err;
             }
+        }
+
+        try {
+            await db.query("ALTER TABLE study_sessions ADD COLUMN session_group_id BIGINT DEFAULT NULL");
+            console.log('[Migration] study_sessions.session_group_id 컬럼이 추가되었습니다.');
+        } catch (err) {
+            if (err.code !== 'ER_DUP_FIELDNAME' && err.errno !== 1060) throw err;
         }
         console.log('--- DB 자동 마이그레이션 검사 완료 ---');
     } catch (err) {

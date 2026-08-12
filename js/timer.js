@@ -4,10 +4,14 @@ let startTime;
 const timer = {
     display: document.getElementById('timer-display'),
     toggleBtn: document.getElementById('study-toggle-btn'),
+    pauseBtn: document.getElementById('study-pause-btn'),
     subjectSelect: document.getElementById('subject-select'),
+    state: 'idle',
+    accumulatedSeconds: 0,
 
     init() {
         this.toggleBtn.addEventListener('click', () => this.handleToggle());
+        this.pauseBtn.addEventListener('click', () => this.handlePauseToggle());
     },
 
     async handleToggle() {
@@ -19,9 +23,9 @@ const timer = {
                 return;
             }
             try {
-                await api.startSession(subjectId);
+                const result = await api.startSession(subjectId);
+                this.start(result.segment_start_time, null, subjectId, '', result.accumulated_seconds || 0);
                 if (window.appState) await window.appState.updateHomeSubjectTime();
-                this.start(new Date());
             } catch (err) {
                 alert(err.message);
             }
@@ -41,8 +45,32 @@ const timer = {
         }
     },
 
-    start(time, planId = null, subjectId = null, planTitle = '') {
+    async handlePauseToggle() {
+        this.pauseBtn.disabled = true;
+        try {
+            if (this.state === 'running') {
+                const result = await api.pauseSession();
+                this.pause(result.accumulated_seconds || 0);
+            } else if (this.state === 'paused') {
+                const result = await api.resumeSession();
+                this.resume(result.segment_start_time, result.accumulated_seconds || 0);
+            }
+            if (window.appState) {
+                await window.appState.updateHomeSubjectTime();
+                await window.appState.loadPlans();
+                if (window.appState.currentPage === 'stats') await window.appState.loadStats();
+            }
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            this.pauseBtn.disabled = false;
+        }
+    },
+
+    start(time, planId = null, subjectId = null, planTitle = '', accumulatedSeconds = 0) {
         startTime = new Date(time);
+        this.accumulatedSeconds = Number(accumulatedSeconds) || 0;
+        this.state = 'running';
         this.activePlanId = planId;
         
         // 전달된 subjectId가 있으면 셀렉트 박스 선택값을 업데이트합니다.
@@ -66,6 +94,8 @@ const timer = {
         // 버튼이 활성화되어 중지 동작이 가능하도록 disabled 상태를 해제합니다.
         this.toggleBtn.disabled = false;
         this.toggleBtn.classList.replace('btn-start', 'btn-stop');
+        this.pauseBtn.classList.remove('hidden', 'is-resume');
+        this.pauseBtn.textContent = '일시 정지';
         this.subjectSelect.disabled = true;
 
         clearInterval(timerInterval);
@@ -73,11 +103,42 @@ const timer = {
         this.updateDisplay();
     },
 
+    pause(accumulatedSeconds) {
+        clearInterval(timerInterval);
+        this.accumulatedSeconds = Number(accumulatedSeconds) || 0;
+        startTime = null;
+        this.state = 'paused';
+        this.pauseBtn.classList.add('is-resume');
+        this.pauseBtn.textContent = '재개';
+        this.updateDisplay();
+    },
+
+    resume(time, accumulatedSeconds) {
+        startTime = new Date(time);
+        this.accumulatedSeconds = Number(accumulatedSeconds) || 0;
+        this.state = 'running';
+        this.pauseBtn.classList.remove('is-resume');
+        this.pauseBtn.textContent = '일시 정지';
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => this.updateDisplay(), 1000);
+        this.updateDisplay();
+    },
+
+    restorePaused(planId = null, subjectId = null, planTitle = '', accumulatedSeconds = 0) {
+        this.start(new Date(), planId, subjectId, planTitle, accumulatedSeconds);
+        this.pause(accumulatedSeconds);
+    },
+
     stop() {
         clearInterval(timerInterval);
         this.activePlanId = null;
         this.activeSubjectId = null;
+        this.accumulatedSeconds = 0;
+        this.state = 'idle';
+        startTime = null;
         this.toggleBtn.classList.replace('btn-stop', 'btn-start');
+        this.pauseBtn.classList.add('hidden');
+        this.pauseBtn.classList.remove('is-resume');
         this.subjectSelect.disabled = false;
         this.display.textContent = '00:00:00';
         if (window.appState) {
@@ -87,13 +148,25 @@ const timer = {
     },
 
     isRunning() {
-        return this.toggleBtn.classList.contains('btn-stop');
+        return this.state === 'running';
+    },
+
+    isActive() {
+        return this.state === 'running' || this.state === 'paused';
+    },
+
+    isPaused() {
+        return this.state === 'paused';
     },
 
     getCurrentDiff() {
         if (!startTime) return 0;
         const now = new Date();
         return Math.floor((now - startTime) / 1000);
+    },
+
+    getElapsedSeconds() {
+        return this.accumulatedSeconds + (this.isRunning() ? this.getCurrentDiff() : 0);
     },
 
     // 초를 분:초 형식으로 포맷팅 (계획용 헬퍼)
@@ -105,10 +178,11 @@ const timer = {
 
     updateDisplay() {
         const diff = this.getCurrentDiff();
+        const elapsed = this.getElapsedSeconds();
         
-        const hours = String(Math.floor(diff / 3600)).padStart(2, '0');
-        const minutes = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
-        const seconds = String(diff % 60).padStart(2, '0');
+        const hours = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+        const minutes = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+        const seconds = String(elapsed % 60).padStart(2, '0');
         
         this.display.textContent = `${hours}:${minutes}:${seconds}`;
 
@@ -193,4 +267,3 @@ const timer = {
 };
 
 window.timer = timer;
-

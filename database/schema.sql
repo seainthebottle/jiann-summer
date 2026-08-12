@@ -24,12 +24,26 @@ CREATE TABLE IF NOT EXISTS subjects (
     UNIQUE KEY uq_user_subject (user_id, name)
 );
 
--- 공부 기록 테이블
+-- 논리적인 공부 실행 테이블 (일시 정지 전후의 여러 구간을 한 번의 공부로 묶음)
+CREATE TABLE IF NOT EXISTS study_session_groups (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    subject_id INT NOT NULL,
+    plan_id INT DEFAULT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'running',
+    started_at DATETIME NOT NULL,
+    ended_at DATETIME,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_session_groups_user_status (user_id, status)
+);
+
+-- 공부 기록 테이블 (한 행은 실제로 시간이 흐른 하나의 구간)
 CREATE TABLE IF NOT EXISTS study_sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     subject_id INT NOT NULL,
     plan_id INT DEFAULT NULL,
+    session_group_id BIGINT DEFAULT NULL,
     start_time DATETIME NOT NULL,
     end_time DATETIME,
     duration_seconds INT DEFAULT 0,
@@ -47,4 +61,3 @@ CREATE TABLE IF NOT EXISTS plans (
     status VARCHAR(20) DEFAULT 'todo',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-

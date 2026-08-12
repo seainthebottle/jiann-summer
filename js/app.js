@@ -1,7 +1,7 @@
 const appState = {
     user: null,
     currentPage: 'auth',
-    version: 'v16',
+    version: 'v17-pause',
     initialized: false,
 
     async init() {
@@ -470,12 +470,17 @@ const appState = {
     },
 
     async checkActiveSession() {
-        const { active } = await api.getStatus();
+        const { state, active } = await api.getStatus();
         if (active) {
             // 셀렉트 박스에서 해당 과목 선택 상태로 변경
             document.getElementById('subject-select').value = active.subject_id;
-            window.timer.start(active.start_time, active.plan_id, active.subject_id, active.plan_title); // activeSubjectId 및 plan_title 연동
+            if (state === 'paused') {
+                window.timer.restorePaused(active.plan_id, active.subject_id, active.plan_title, active.accumulated_seconds || 0);
+            } else {
+                window.timer.start(active.start_time, active.plan_id, active.subject_id, active.plan_title, active.accumulated_seconds || 0);
+            }
             await this.updateHomeSubjectTime();
+            await this.loadPlans();
         } else {
             await this.updateHomeSubjectTime();
         }
@@ -1006,11 +1011,12 @@ const appState = {
             if (emptyMsg) emptyMsg.classList.add('hidden');
 
             const currentActivePlanId = window.timer ? window.timer.activePlanId : null;
-            const isRunning = window.timer ? window.timer.isRunning() : false;
+            const isActive = window.timer ? window.timer.isActive() : false;
+            const isPaused = window.timer ? window.timer.isPaused() : false;
 
             plans.forEach(plan => {
                 const li = document.createElement('li');
-                const isRunningThis = isRunning && currentActivePlanId === plan.id;
+                const isRunningThis = isActive && currentActivePlanId === plan.id;
 
                 li.className = `plan-card status-${plan.status}${isRunningThis ? ' running' : ''}`;
                 li.id = `plan-card-${plan.id}`;
@@ -1046,7 +1052,10 @@ const appState = {
                 // 버튼 구성: 현재 진행 중인 계획 카드에는 '계획 중지' 버튼을 노출합니다.
                 let actionButtons = '';
                 if (isRunningThis) {
-                    actionButtons = `<button class="btn-plan-action btn-plan-stop" onclick="appState.stopPlan()">계획 중지</button>`;
+                    actionButtons = `
+                        <button class="btn-plan-action btn-plan-pause" onclick="appState.togglePlanPause()">${isPaused ? '재개' : '일시 정지'}</button>
+                        <button class="btn-plan-action btn-plan-stop" onclick="appState.stopPlan()">계획 종료</button>
+                    `;
                 } else {
                     if (plan.status === 'done') {
                         // 완료된 계획은 '완료됨' 표시와 함께 완료 취소 버튼을 노출합니다.
@@ -1086,7 +1095,7 @@ const appState = {
                     const cDate = new Date(plan.completed_at);
                     completedTimeText = `${String(cDate.getHours()).padStart(2, '0')}:${String(cDate.getMinutes()).padStart(2, '0')}`;
                 } else if (plan.status === 'in_progress' || isRunningThis) {
-                    completedTimeText = '공부 중';
+                    completedTimeText = isRunningThis && isPaused ? '일시 정지' : '공부 중';
                 }
 
                 // 누적 소요 시간 계산
@@ -1144,7 +1153,7 @@ const appState = {
 
     // 계획 시작
     async startPlan(planId, subjectId) {
-        if (window.timer && window.timer.isRunning()) {
+        if (window.timer && window.timer.isActive()) {
             if (window.timer.activePlanId === planId) return;
             if (!confirm('현재 진행 중인 공부 세션을 종료하고 이 계획을 시작하시겠습니까?')) {
                 return;
@@ -1159,16 +1168,20 @@ const appState = {
         }
 
         try {
-            await api.startSession(subjectId, planId);
+            const result = await api.startSession(subjectId, planId);
             document.getElementById('subject-select').value = subjectId;
             const plan = (this.plansCache || []).find(p => p.id === planId);
-            window.timer.start(new Date(), planId, subjectId, plan ? plan.title : '');
+            window.timer.start(result.segment_start_time, planId, subjectId, plan ? plan.title : '', result.accumulated_seconds || 0);
             await this.updateHomeSubjectTime();
 
             await this.loadPlans();
         } catch (err) {
             alert(err.message);
         }
+    },
+
+    async togglePlanPause() {
+        if (window.timer) await window.timer.handlePauseToggle();
     },
 
     // 계획 정지
@@ -1308,5 +1321,3 @@ const appState = {
 
 window.appState = appState;
 appState.init();
-
-

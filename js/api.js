@@ -78,6 +78,14 @@ const api = {
         });
     },
 
+    async pauseSession() {
+        return await this.request('/study/pause', { method: 'POST' });
+    },
+
+    async resumeSession() {
+        return await this.request('/study/resume', { method: 'POST' });
+    },
+
     async getStatus() {
         return await this.request('/study/status');
     },

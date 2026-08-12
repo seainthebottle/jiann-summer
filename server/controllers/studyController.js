@@ -32,23 +32,89 @@ const isoToSQLDateTime = (isoStr) => {
 
 
 
+const getOpenGroup = async (userId) => {
+    const groups = await db.query(
+        `SELECT * FROM study_session_groups
+         WHERE user_id = ? AND status IN ('running', 'paused')
+         ORDER BY id DESC LIMIT 1`,
+        [userId]
+    );
+    return groups[0] || null;
+};
+
+const getGroupAccumulatedSeconds = async (groupId) => {
+    const rows = await db.query(
+        `SELECT COALESCE(SUM(
+            CASE WHEN end_time IS NULL
+                 THEN TIMESTAMPDIFF(SECOND, start_time, UTC_TIMESTAMP())
+                 ELSE duration_seconds END
+        ), 0) AS total
+         FROM study_sessions WHERE session_group_id = ?`,
+        [groupId]
+    );
+    return Number(rows[0].total) || 0;
+};
+
+const updatePlanAfterFinalStop = async (group, totalSeconds, remove = false) => {
+    if (!group.plan_id) return;
+    if (remove && totalSeconds > 0) {
+        await db.query(
+            `UPDATE plans SET completed_seconds = GREATEST(0, completed_seconds - ?)
+             WHERE id = ? AND user_id = ?`,
+            [totalSeconds, group.plan_id, group.user_id]
+        );
+    }
+    const plans = await db.query(
+        'SELECT completed_seconds, estimated_minutes FROM plans WHERE id = ? AND user_id = ?',
+        [group.plan_id, group.user_id]
+    );
+    if (plans.length > 0) {
+        const status = plans[0].completed_seconds >= plans[0].estimated_minutes * 60 ? 'done' : 'todo';
+        await db.query('UPDATE plans SET status = ? WHERE id = ? AND user_id = ?', [status, group.plan_id, group.user_id]);
+    }
+};
+
 // 공부 시작
 exports.startSession = async (req, res) => {
     const { subject_id, plan_id } = req.body;
     const user_id = req.user.id;
     try {
-        // 이미 진행 중인 세션이 있는지 확인
+        const subjects = await db.query('SELECT id FROM subjects WHERE id = ? AND user_id = ?', [subject_id, user_id]);
+        if (subjects.length === 0) {
+            return res.status(404).json({ error: '선택한 과목을 찾을 수 없습니다.' });
+        }
+        if (plan_id) {
+            const plans = await db.query(
+                'SELECT id FROM plans WHERE id = ? AND user_id = ? AND subject_id = ?',
+                [plan_id, user_id, subject_id]
+            );
+            if (plans.length === 0) {
+                return res.status(404).json({ error: '선택한 과목에 해당하는 계획을 찾을 수 없습니다.' });
+            }
+        }
+        // 새 방식의 실행 중/일시 정지 그룹과 과거 방식의 열린 세션을 모두 확인합니다.
+        const openGroup = await getOpenGroup(user_id);
         const active = await db.query(
             "SELECT * FROM study_sessions WHERE user_id = ? AND end_time IS NULL",
             [user_id]
         );
-        if (active.length > 0) {
+        if (openGroup || active.length > 0) {
             return res.status(400).json({ error: '이미 진행 중인 공부 세션이 있습니다.' });
         }
 
-        await db.query(
-            "INSERT INTO study_sessions (user_id, subject_id, plan_id, start_time) VALUES (?, ?, ?, UTC_TIMESTAMP())",
+        const groupResult = await db.query(
+            `INSERT INTO study_session_groups
+             (user_id, subject_id, plan_id, status, started_at)
+             VALUES (?, ?, ?, 'running', UTC_TIMESTAMP())`,
             [user_id, subject_id, plan_id || null]
+        );
+        const groupId = Number(groupResult.insertId);
+
+        await db.query(
+            `INSERT INTO study_sessions
+             (user_id, subject_id, plan_id, session_group_id, start_time)
+             VALUES (?, ?, ?, ?, UTC_TIMESTAMP())`,
+            [user_id, subject_id, plan_id || null, groupId]
         );
 
         if (plan_id) {
@@ -58,10 +124,93 @@ exports.startSession = async (req, res) => {
             );
         }
 
-        res.json({ message: '공부 시작!' });
+        const started = await db.query('SELECT started_at FROM study_session_groups WHERE id = ?', [groupId]);
+        res.json({
+            message: '공부 시작!',
+            state: 'running',
+            session_group_id: groupId,
+            accumulated_seconds: 0,
+            segment_start_time: parseUTCDate(started[0].started_at).toISOString()
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: '공부 시작 서버 오류: ' + err.message });
+    }
+};
+
+// 공부 일시 정지
+exports.pauseSession = async (req, res) => {
+    const user_id = req.user.id;
+    try {
+        const group = await getOpenGroup(user_id);
+        if (!group || group.status !== 'running') {
+            return res.status(400).json({ error: '진행 중인 공부 세션이 없습니다.' });
+        }
+        const active = await db.query(
+            `SELECT * FROM study_sessions
+             WHERE user_id = ? AND session_group_id = ? AND end_time IS NULL
+             ORDER BY id DESC LIMIT 1`,
+            [user_id, group.id]
+        );
+        if (active.length === 0) {
+            return res.status(409).json({ error: '진행 중인 공부 구간을 찾을 수 없습니다.' });
+        }
+        const diff = await db.query(
+            'SELECT GREATEST(0, TIMESTAMPDIFF(SECOND, start_time, UTC_TIMESTAMP())) AS diff FROM study_sessions WHERE id = ?',
+            [active[0].id]
+        );
+        const segmentSeconds = Number(diff[0].diff) || 0;
+        await db.query(
+            'UPDATE study_sessions SET end_time = UTC_TIMESTAMP(), duration_seconds = ? WHERE id = ? AND end_time IS NULL',
+            [segmentSeconds, active[0].id]
+        );
+        await db.query("UPDATE study_session_groups SET status = 'paused' WHERE id = ? AND user_id = ? AND status = 'running'", [group.id, user_id]);
+        if (group.plan_id && segmentSeconds > 0) {
+            await db.query(
+                'UPDATE plans SET completed_seconds = completed_seconds + ? WHERE id = ? AND user_id = ?',
+                [segmentSeconds, group.plan_id, user_id]
+            );
+        }
+        const total = await getGroupAccumulatedSeconds(group.id);
+        res.json({ message: '공부를 일시 정지했습니다.', state: 'paused', accumulated_seconds: total });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: '공부 일시 정지 서버 오류: ' + err.message });
+    }
+};
+
+// 공부 재개
+exports.resumeSession = async (req, res) => {
+    const user_id = req.user.id;
+    try {
+        const group = await getOpenGroup(user_id);
+        if (!group || group.status !== 'paused') {
+            return res.status(400).json({ error: '일시 정지된 공부 세션이 없습니다.' });
+        }
+        const accumulated = await getGroupAccumulatedSeconds(group.id);
+        await db.query(
+            `INSERT INTO study_sessions
+             (user_id, subject_id, plan_id, session_group_id, start_time)
+             VALUES (?, ?, ?, ?, UTC_TIMESTAMP())`,
+            [user_id, group.subject_id, group.plan_id, group.id]
+        );
+        await db.query("UPDATE study_session_groups SET status = 'running' WHERE id = ? AND user_id = ? AND status = 'paused'", [group.id, user_id]);
+        if (group.plan_id) {
+            await db.query("UPDATE plans SET status = 'in_progress' WHERE id = ? AND user_id = ?", [group.plan_id, user_id]);
+        }
+        const active = await db.query(
+            'SELECT start_time FROM study_sessions WHERE session_group_id = ? AND end_time IS NULL ORDER BY id DESC LIMIT 1',
+            [group.id]
+        );
+        res.json({
+            message: '공부를 재개했습니다.',
+            state: 'running',
+            accumulated_seconds: accumulated,
+            segment_start_time: parseUTCDate(active[0].start_time).toISOString()
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: '공부 재개 서버 오류: ' + err.message });
     }
 };
 
@@ -70,6 +219,52 @@ exports.startSession = async (req, res) => {
 exports.stopSession = async (req, res) => {
     const user_id = req.user.id;
     try {
+        const group = await getOpenGroup(user_id);
+        if (group) {
+            if (group.status === 'running') {
+                const active = await db.query(
+                    `SELECT id FROM study_sessions
+                     WHERE user_id = ? AND session_group_id = ? AND end_time IS NULL
+                     ORDER BY id DESC LIMIT 1`,
+                    [user_id, group.id]
+                );
+                if (active.length === 0) {
+                    return res.status(409).json({ error: '진행 중인 공부 구간을 찾을 수 없습니다.' });
+                }
+                const diff = await db.query(
+                    'SELECT GREATEST(0, TIMESTAMPDIFF(SECOND, start_time, UTC_TIMESTAMP())) AS diff FROM study_sessions WHERE id = ?',
+                    [active[0].id]
+                );
+                const segmentSeconds = Number(diff[0].diff) || 0;
+                await db.query(
+                    'UPDATE study_sessions SET end_time = UTC_TIMESTAMP(), duration_seconds = ? WHERE id = ? AND end_time IS NULL',
+                    [segmentSeconds, active[0].id]
+                );
+                if (group.plan_id && segmentSeconds > 0) {
+                    await db.query(
+                        'UPDATE plans SET completed_seconds = completed_seconds + ? WHERE id = ? AND user_id = ?',
+                        [segmentSeconds, group.plan_id, user_id]
+                    );
+                }
+            }
+
+            const totalSeconds = await getGroupAccumulatedSeconds(group.id);
+            if (totalSeconds <= 60) {
+                await db.query('DELETE FROM study_sessions WHERE session_group_id = ? AND user_id = ?', [group.id, user_id]);
+                await updatePlanAfterFinalStop(group, totalSeconds, true);
+                await db.query('DELETE FROM study_session_groups WHERE id = ? AND user_id = ?', [group.id, user_id]);
+                return res.json({ message: '공부 시간이 1분 이하여서 기록되지 않았습니다.', state: 'idle', duration_seconds: 0 });
+            }
+
+            await db.query(
+                "UPDATE study_session_groups SET status = 'ended', ended_at = UTC_TIMESTAMP() WHERE id = ? AND user_id = ?",
+                [group.id, user_id]
+            );
+            await updatePlanAfterFinalStop(group, totalSeconds, false);
+            return res.json({ message: '공부 종료!', state: 'idle', duration_seconds: totalSeconds });
+        }
+
+        // 그룹 도입 전 생성된 열린 세션을 위한 기존 호환 처리
         const active = await db.query(
             "SELECT * FROM study_sessions WHERE user_id = ? AND end_time IS NULL ORDER BY start_time DESC LIMIT 1",
             [user_id]
@@ -139,6 +334,36 @@ exports.stopSession = async (req, res) => {
 exports.getStatus = async (req, res) => {
     const user_id = req.user.id;
     try {
+        const groupRows = await db.query(
+            `SELECT g.*, sub.name AS subject_name, p.title AS plan_title,
+                    active.start_time AS segment_start_time,
+                    COALESCE((SELECT SUM(s.duration_seconds) FROM study_sessions s
+                              WHERE s.session_group_id = g.id AND s.end_time IS NOT NULL), 0) AS accumulated_seconds
+             FROM study_session_groups g
+             JOIN subjects sub ON g.subject_id = sub.id
+             LEFT JOIN plans p ON g.plan_id = p.id
+             LEFT JOIN study_sessions active
+               ON active.session_group_id = g.id AND active.end_time IS NULL
+             WHERE g.user_id = ? AND g.status IN ('running', 'paused')
+             ORDER BY g.id DESC LIMIT 1`,
+            [user_id]
+        );
+        if (groupRows.length > 0) {
+            const group = groupRows[0];
+            return res.json({
+                state: group.status,
+                active: {
+                    session_group_id: group.id,
+                    subject_id: group.subject_id,
+                    subject_name: group.subject_name,
+                    plan_id: group.plan_id,
+                    plan_title: group.plan_title,
+                    accumulated_seconds: Number(group.accumulated_seconds) || 0,
+                    start_time: group.segment_start_time ? parseUTCDate(group.segment_start_time).toISOString() : null,
+                    started_at: parseUTCDate(group.started_at).toISOString()
+                }
+            });
+        }
         const active = await db.query(
             `SELECT s.*, sub.name as subject_name, p.title as plan_title
              FROM study_sessions s
@@ -151,9 +376,9 @@ exports.getStatus = async (req, res) => {
             const session = active[0];
             // DB의 DATETIME(UTC)을 'Z'를 붙여 UTC로 정확히 파싱 후 ISO 스트링으로 응답
             session.start_time = parseUTCDate(session.start_time).toISOString();
-            res.json({ active: session });
+            res.json({ state: 'running', active: session });
         } else {
-            res.json({ active: null });
+            res.json({ state: 'idle', active: null });
         }
 
 
@@ -281,6 +506,21 @@ exports.getStats = async (req, res) => {
         // SQL 결과가 0인데 JS 계산 결과가 있다면 JS 결과를 우선 사용 (보험용)
         const finalDailyTotal = (sqlDailyTotal === 0 && manualDailyTotal > 0) ? manualDailyTotal : sqlDailyTotal;
 
+        let countQuery = `
+            SELECT COUNT(DISTINCT COALESCE(CAST(s.session_group_id AS CHAR), CONCAT('legacy-', s.id))) AS study_count,
+                   COUNT(*) AS segment_count
+            FROM study_sessions s
+            WHERE s.user_id = ?
+              AND s.start_time <= ?
+              AND IFNULL(s.end_time, UTC_TIMESTAMP()) >= ?
+        `;
+        const countParams = [user_id, sqlRangeEnd, sqlRangeStart];
+        if (subjectId && subjectId !== 'null' && subjectId !== '') {
+            countQuery += ' AND s.subject_id = ?';
+            countParams.push(subjectId);
+        }
+        const countResult = await db.query(countQuery, countParams);
+
         // 주간 합계 (최근 7일)
         // 클라이언트에서 넘겨준 rangeStart(기준일 00:00 UTC)를 기준으로 6일 전 계산
         const weeklyStartDate = new Date(new Date(rangeStart).getTime() - 6 * 86400000);
@@ -385,7 +625,9 @@ exports.getStats = async (req, res) => {
 
         // 3. 전체 누적 합계 (모든 시간)
         let totalQuery = `
-            SELECT COALESCE(SUM(IFNULL(s.duration_seconds, TIMESTAMPDIFF(SECOND, s.start_time, UTC_TIMESTAMP()))), 0) as total 
+            SELECT COALESCE(SUM(CASE WHEN s.end_time IS NULL
+                                THEN TIMESTAMPDIFF(SECOND, s.start_time, UTC_TIMESTAMP())
+                                ELSE s.duration_seconds END), 0) as total
             FROM study_sessions s 
             WHERE s.user_id = ?
         `;
@@ -408,13 +650,15 @@ exports.getStats = async (req, res) => {
             subjectWeeklyAvgs,
             subjectMonthlyAvgs,
             cumulativeTotal: totalTotalResult[0].total,
+            studyCount: Number(countResult[0].study_count) || 0,
+            segmentCount: Number(countResult[0].segment_count) || 0,
             debug: {
                 range: { start: rangeStart, end: rangeEnd },
                 manualDailyTotal,
 
                 sqlDailyTotal: sqlDailyTotal,
                 finalDailyTotal: finalDailyTotal,
-                sessionCount: sessions.length,
+                sessionCount: Number(countResult[0].study_count) || 0,
                 rawSessions: sessions
             }
         };
@@ -697,4 +941,3 @@ exports.deleteSubject = async (req, res) => {
         res.status(500).json({ error: '과목 삭제 중 오류 발생' });
     }
 };
-
